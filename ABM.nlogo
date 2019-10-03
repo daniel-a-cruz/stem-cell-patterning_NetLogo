@@ -1,3 +1,4 @@
+extensions [vid]
 breed [ highcells highcell ]
 breed [ lowcells lowcell ]
 
@@ -8,23 +9,15 @@ to setup
 
   set-default-shape turtles "circle"
 
-  ask patches with [abs pxcor = max-pxcor] [
-    set pcolor grey
-  ]
-
-  ask patches with [abs pycor = max-pycor] [
-    set pcolor grey
-  ]
-
   create-highcells (num-highcells) [
-    sprinkles
+    setxy random-xcor random-ycor
     set color yellow
     set move? true
     set energy random (pluripotent-cells-mitosis-threshold)
   ]
 
   create-lowcells (num-lowcells) [
-    sprinkles
+    setxy random-xcor random-ycor
     set color red
     set move? true
     set energy random (pluripotent-cells-mitosis-threshold)
@@ -36,13 +29,6 @@ to setup
 
   show-energy-level
   reset-ticks
-end
-
-to sprinkles
-  setxy random-xcor random-ycor
-  if pcolor = grey [
-    sprinkles
-  ]
 end
 
 to go
@@ -64,31 +50,18 @@ to only-single-cells-can-move
     if any? other lowcells in-radius 1.0 [
       set move? false
     ]
-    if pcolor = grey [
-      fd -1
-    ]
   ]
 
   ask turtles with [ color = yellow ] with [ move? ] [
     if model-type = "Schrode" [
-      if not any? other turtles-on patch-ahead 1 [
-        let nearest-lowcell min-one-of lowcells [ distance myself ]
-        face nearest-lowcell
-        fd 1
-        if pcolor = grey [
-          fd -1
-        ]
-      ]
+      let nearest-lowcell min-one-of lowcells [ distance myself ]
+      face nearest-lowcell
+      fd 1
     ]
     if model-type = "Guye" [
-      if not any? other turtles-on patch-ahead 1 [
-        let nearest-differentiated-cell min-one-of turtles with [ color = blue ] [ distance myself ]
-        face nearest-differentiated-cell
-        fd 1
-        if pcolor = grey [
-          fd -1
-        ]
-      ]
+      let nearest-differentiated-cell min-one-of turtles with [ color = blue ] [ distance myself ]
+      face nearest-differentiated-cell
+      fd 1
     ]
   ]
 
@@ -97,9 +70,6 @@ to only-single-cells-can-move
     fd 1
     if any? other turtles with [ color = blue ] in-radius 1.0 [
       set move? false
-    ]
-    if pcolor = grey [
-      fd -1
     ]
   ]
 end
@@ -121,9 +91,6 @@ to cell-division
       hatch 1 [
         rt random-float 360
         fd 1
-        if pcolor = grey [
-          fd -1
-        ]
         let too-near one-of other turtles in-radius 0.9
         if too-near != nobody [
           face too-near
@@ -139,9 +106,6 @@ to cell-division
       hatch 1 [
         rt random-float 360
         fd 1
-        if pcolor = grey [
-          fd -1
-        ]
         let too-near one-of other turtles in-radius 0.9
         if too-near != nobody [
           face too-near
@@ -157,12 +121,7 @@ to repel-if-too-close
     let too-near one-of other turtles in-radius 0.9
     if too-near != nobody [
       face too-near
-      if pcolor = grey [
-        fd -1
-      ]
-      if pcolor != grey [
-        fd -0.3
-      ]
+      fd -0.3
     ]
   ]
 
@@ -170,12 +129,7 @@ to repel-if-too-close
     let too-near one-of other turtles in-radius 0.9
     if too-near != nobody [
       face too-near
-      if pcolor = grey [
-        fd -1
-      ]
-      if pcolor != grey [
-        fd -0.3
-      ]
+      fd -0.3
     ]
   ]
 
@@ -183,12 +137,7 @@ to repel-if-too-close
     let too-near one-of other turtles in-radius 0.9
     if too-near != nobody [
       face too-near
-      if pcolor = grey [
-        fd -1
-      ]
-      if pcolor != grey [
-        fd -0.3
-      ]
+      fd -0.3
     ]
   ]
 end
@@ -219,15 +168,15 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
-1
+0
+0
 1
 -25
 25
 -25
 25
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -410,6 +359,23 @@ CHOOSER
 model-type
 model-type
 "Schrode" "Guye"
+1
+
+BUTTON
+95
+437
+199
+470
+Video Record
+setup\nvid:start-recorder\nvid:record-view\nrepeat 15\n[ go\n  vid:record-view ]\nvid:save-recording \"out.mp4\"
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
 1
 
 @#$#@#$#@
