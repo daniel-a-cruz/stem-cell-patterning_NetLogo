@@ -10,7 +10,7 @@ to setup
   clear-all
   vid:reset-recorder
 
-  set-default-shape turtles "dot"
+  set-default-shape turtles "circle"
 
   create-gataHighs (num-gataHigh) [
     setxy random-xcor random-ycor
