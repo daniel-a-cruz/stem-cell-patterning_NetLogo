@@ -1,153 +1,157 @@
 extensions [vid]
-breed [ highcells highcell ]
-breed [ lowcells lowcell ]
+breed [ gataHighs gataHigh ]
+breed [ gataLows gataLow ]
+breed [ diffCells diffCell]
 
-turtles-own [ move? energy ]
+
+turtles-own [ motion energy ]
 
 to setup
   clear-all
+  vid:reset-recorder
 
-  set-default-shape turtles "circle"
+  set-default-shape turtles "dot"
 
-  create-highcells (num-highcells) [
+  create-gataHighs (num-gataHigh) [
     setxy random-xcor random-ycor
     set color yellow
-    set move? true
-    set energy random (pluripotent-cells-mitosis-threshold)
+    set motion true
+    set energy random (pluri-mitosis-threshold)
   ]
 
-  create-lowcells (num-lowcells) [
+  create-gataLows (num-gataLow) [
     setxy random-xcor random-ycor
+    ;set color [255 0 0 125]
     set color red
-    set move? true
-    set energy random (pluripotent-cells-mitosis-threshold)
+    set motion true
+    set energy random (pluri-mitosis-threshold)
   ]
 
-  ask turtles with [ color = yellow ] with-max [ energy ] [
-    set color blue
-  ]
-
-  show-energy-level
+  showEnergy
   reset-ticks
 end
 
 to go
-  ask turtles [
-    set energy energy + 5
-    only-single-cells-can-move
-    highcells-need-lowcells-to-be-differentiated
-    cell-division
-;    repel-if-too-close
-  ]
+  ask turtles [ set energy energy + 5 ]
+  singleCellmove
+  diff-highNeedsLow
+  diff-lowSurrounded
+  cell-division
   tick
-  show-energy-level
+  showEnergy
 end
 
-to only-single-cells-can-move
-  ask lowcells with [ move? ] [
-    rt random-float 360
-    fd 1
-    if any? other lowcells in-radius 1.0 [
-      set move? false
+to move [ dist ]
+  if dist >= .25 [
+    let obs count turtles in-cone 1 60
+    ifelse obs <= 5 [
+      fd dist
     ]
-  ]
-
-  ask turtles with [ color = yellow ] with [ move? ] [
-    if model-type = "Schrode" [
-      let nearest-lowcell min-one-of lowcells [ distance myself ]
-      face nearest-lowcell
-      fd 1
-    ]
-    if model-type = "Guye" [
-      let nearest-differentiated-cell min-one-of turtles with [ color = blue ] [ distance myself ]
-      face nearest-differentiated-cell
-      fd 1
-    ]
-  ]
-
-  ask turtles with [ color = blue ] with [ move? ] [
-    rt random-float 360
-    fd 1
-    if any? other turtles with [ color = blue ] in-radius 1.0 [
-      set move? false
+    [
+      let angle random-float 30
+      let temp random 1
+      ifelse temp = 1 [
+        rt 30 + angle
+      ]
+      [
+        lt 30 + angle
+      ]
+      move dist / 2
     ]
   ]
 end
 
-to highcells-need-lowcells-to-be-differentiated
-  ask lowcells in-radius interaction-distance [
-    ask highcells in-radius interaction-distance [
+to singleCellmove
+  ask turtles with [ motion ] [
+    if breed = gataLows [
+      rt random-float 360
+      move 2
+      if any? other gataLows in-radius 1.0 [
+        set motion false
+      ]
+    ]
+    if breed = gataHighs [
+      if model-type = "Schrode" [
+        let nearest-gataLow min-one-of gataLows [ distance myself ]
+        face nearest-gataLow
+        move 2
+      ]
+
+      if model-type = "Guye" [
+        let nearest-diff min-one-of diffCells [ distance myself ]
+        ifelse nearest-diff != nobody [
+          face nearest-diff
+          move 2
+        ]
+        [
+          let nearest-gataLow min-one-of gataLows [ distance myself ]
+          face nearest-gataLow
+          move 2
+        ]
+      ]
+    ]
+
+    if breed = diffCells [
+      rt random-float 360
+      move 2
+      if any? other diffCells in-radius 1.0 [
+        set motion false
+      ]
+    ]
+  ]
+end
+
+to diff-highNeedsLow
+  ask gataHighs [
+    let crowd count gataLows in-radius interaction-distance
+    if crowd > crowd-threshold [
+      set breed diffCells
       set color blue
-      set move? true
-;      set energy energy - 10
+      set motion true
+    ]
+  ]
+end
+
+to diff-lowSurrounded
+  ask gataLows [
+    let crowd count diffCells in-radius interaction-distance
+    if crowd > 1.5 * crowd-threshold [
+      set breed diffCells
+      set color blue
+      set motion true
     ]
   ]
 end
 
 to cell-division
-  ask lowcells with [ move? = false ] [
-    if (energy > pluripotent-cells-mitosis-threshold) [
-      set energy (energy / 2)
-      hatch 1 [
-        rt random-float 360
-        fd 1
-        let too-near one-of other turtles in-radius 0.9
-        if too-near != nobody [
-          face too-near
-          fd -0.3
+  ask turtles with [ motion = false ] [
+    if breed = gataLows [
+      if (energy > pluri-mitosis-threshold) [
+        set energy (energy / 2)
+        hatch 1 [
+          rt random-float 360
+          move .5
         ]
       ]
     ]
-  ]
-
-  ask turtles with [ color = blue ] with [ move? = false ] [
-    if (energy > differentiated-cells-mitosis-threshold) [
-      set energy (energy / 2)
-      hatch 1 [
-        rt random-float 360
-        fd 1
-        let too-near one-of other turtles in-radius 0.9
-        if too-near != nobody [
-          face too-near
-          fd -0.3
+    if breed = diffCells [
+      if (energy > diff-mitosis-threshold) [
+        set energy (energy / 2)
+        hatch 1 [
+          rt random-float 360
+          move .5
         ]
       ]
     ]
   ]
 end
 
-to repel-if-too-close
-  ask lowcells [
-    let too-near one-of other turtles in-radius 0.9
-    if too-near != nobody [
-      face too-near
-      fd -0.3
-    ]
-  ]
-
-  ask turtles with [ color = yellow ] [
-    let too-near one-of other turtles in-radius 0.9
-    if too-near != nobody [
-      face too-near
-      fd -0.3
-    ]
-  ]
-
-  ask turtles with [ color = blue ] [
-    let too-near one-of other turtles in-radius 0.9
-    if too-near != nobody [
-      face too-near
-      fd -0.3
-    ]
-  ]
-end
-
-to show-energy-level
+to showEnergy
   ask turtles [
     set label ""
   ]
 
-  if show-energy-level? [
+  if show-energy [
     ask turtles [
       set label energy
     ]
@@ -155,13 +159,13 @@ to show-energy-level
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-339
-20
-1010
-692
+387
+19
+1005
+638
 -1
 -1
-13.0
+10.0
 1
 15
 1
@@ -171,10 +175,10 @@ GRAPHICS-WINDOW
 0
 0
 1
--25
-25
--25
-25
+-30
+30
+-30
+30
 1
 1
 1
@@ -182,42 +186,42 @@ ticks
 30.0
 
 SLIDER
-28
-75
-200
-108
-num-highcells
-num-highcells
-1
+20
+80
+280
+113
+num-gataHigh
+num-gataHigh
+0
 1000
 100.0
-1
+10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-28
-118
-200
-151
-num-lowcells
-num-lowcells
-1
+20
+125
+280
+158
+num-gataLow
+num-gataLow
+0
 1000
 500.0
-1
+10
 1
 NIL
 HORIZONTAL
 
 BUTTON
-28
-388
-95
-421
-NIL
-setup
+20
+400
+100
+433
+Initialize
+setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
 1
 T
@@ -229,12 +233,12 @@ NIL
 1
 
 BUTTON
-198
-388
-261
-421
-go
-go
+202
+400
+274
+433
+Run
+go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
 1
 T
@@ -246,10 +250,10 @@ NIL
 0
 
 SLIDER
-28
-161
-207
-194
+20
+170
+280
+203
 interaction-distance
 interaction-distance
 1
@@ -261,86 +265,86 @@ NIL
 HORIZONTAL
 
 MONITOR
-192
-204
-324
-249
+200
+450
+280
+495
 num-differentiated
-count turtles with [ color = blue ]
+count diffCells
 17
 1
 11
 
 SLIDER
-28
-302
-304
-335
-pluripotent-cells-mitosis-threshold
-pluripotent-cells-mitosis-threshold
+20
+260
+280
+293
+pluri-mitosis-threshold
+pluri-mitosis-threshold
 0
 500
 50.0
-1
+5
 1
 NIL
 HORIZONTAL
 
 SLIDER
-28
-345
-318
-378
-differentiated-cells-mitosis-threshold
-differentiated-cells-mitosis-threshold
+20
+305
+280
+338
+diff-mitosis-threshold
+diff-mitosis-threshold
 0
 500
 100.0
-1
+5
 1
 NIL
 HORIZONTAL
 
 SWITCH
-28
-259
-214
-292
-show-energy-level?
-show-energy-level?
+20
+350
+280
+383
+show-energy
+show-energy
 1
 1
 -1000
 
 MONITOR
-110
-204
-183
-249
+20
+450
+100
+495
 num-low
-count turtles with [ color = red ]
+count gataLows
 17
 1
 11
 
 MONITOR
-28
-204
-101
-249
+110
+450
+190
+495
 num-high
-count turtles with [ color = yellow ]
+count gataHighs
 17
 1
 11
 
 BUTTON
-104
-388
-189
-421
-go once
-go
+110
+400
+192
+433
+Step
+go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
 1
 T
@@ -352,9 +356,9 @@ NIL
 1
 
 CHOOSER
-28
 20
-166
+20
+145
 65
 model-type
 model-type
@@ -362,12 +366,12 @@ model-type
 1
 
 BUTTON
-95
-437
-199
-470
-Video Record
-setup\nvid:start-recorder\nvid:record-view\nrepeat 15\n[ go\n  vid:record-view ]\nvid:save-recording \"out.mp4\"
+100
+510
+200
+543
+Save Video
+if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
 1
 T
@@ -377,6 +381,31 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+20
+215
+280
+248
+crowd-threshold
+crowd-threshold
+5
+100
+30.0
+5
+1
+NIL
+HORIZONTAL
+
+CHOOSER
+160
+20
+285
+65
+record-type
+record-type
+"None" "View" "Interface"
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -737,5 +766,5 @@ true
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 @#$#@#$#@
-0
+1
 @#$#@#$#@
