@@ -10,7 +10,7 @@ to setup
   clear-all
   vid:reset-recorder
 
-  set-default-shape turtles "circle"
+  set-default-shape turtles "dot"
 
   create-gataHighs (num-gataHigh) [
     setxy random-xcor random-ycor
@@ -27,18 +27,16 @@ to setup
     set energy random (pluri-mitosis-threshold)
   ]
 
-  showEnergy
   reset-ticks
 end
 
 to go
   ask turtles [ set energy energy + 5 ]
   singleCellmove
-  diff-highNeedsLow
+  diff-pathway
   diff-lowSurrounded
   cell-division
   tick
-  showEnergy
 end
 
 to move [ dist ]
@@ -65,35 +63,26 @@ to singleCellmove
   ask turtles with [ motion ] [
     if breed = gataLows [
       rt random-float 360
-      move 2
+      move 1.5
       if any? other gataLows in-radius 1.0 [
         set motion false
       ]
     ]
     if breed = gataHighs [
-      if model-type = "Schrode" [
-        let nearest-gataLow min-one-of gataLows [ distance myself ]
-        face nearest-gataLow
-        move 2
-      ]
-
-      if model-type = "Guye" [
         let nearest-diff min-one-of diffCells [ distance myself ]
         ifelse nearest-diff != nobody [
           face nearest-diff
-          move 2
+          move 1.5
         ]
         [
-          let nearest-gataLow min-one-of gataLows [ distance myself ]
-          face nearest-gataLow
-          move 2
+          rt random-float 360
+          move 1.5
         ]
       ]
-    ]
 
     if breed = diffCells [
       rt random-float 360
-      move 2
+      move 1.5
       if any? other diffCells in-radius 1.0 [
         set motion false
       ]
@@ -101,11 +90,12 @@ to singleCellmove
   ]
 end
 
-to diff-highNeedsLow
+to diff-pathway
   ask gataHighs [
     let crowd count gataLows in-radius interaction-distance
     if crowd > crowd-threshold [
       set breed diffCells
+      ;set color [0 0 255 125]
       set color blue
       set motion true
     ]
@@ -114,10 +104,11 @@ end
 
 to diff-lowSurrounded
   ask gataLows [
-    let crowd count diffCells in-radius interaction-distance
-    if crowd > 1.5 * crowd-threshold [
+    let crowd count diffCells in-radius 2 * interaction-distance
+    if crowd > 5 * crowd-threshold [
       set breed diffCells
-      set color blue
+      ;set color [0 0 255 125]
+      ;set color blue
       set motion true
     ]
   ]
@@ -142,18 +133,6 @@ to cell-division
           move .5
         ]
       ]
-    ]
-  ]
-end
-
-to showEnergy
-  ask turtles [
-    set label ""
-  ]
-
-  if show-energy [
-    ask turtles [
-      set label energy
     ]
   ]
 end
@@ -186,25 +165,25 @@ ticks
 30.0
 
 SLIDER
-20
-80
-280
-113
+45
+285
+305
+318
 num-gataHigh
 num-gataHigh
 0
 1000
-100.0
+500.0
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-20
-125
-280
-158
+45
+330
+305
+363
 num-gataLow
 num-gataLow
 0
@@ -216,10 +195,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-20
-400
-100
-433
+395
+655
+468
+688
 Initialize
 setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
@@ -233,10 +212,10 @@ NIL
 1
 
 BUTTON
-202
-400
-274
-433
+560
+655
+626
+688
 Run
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
@@ -250,36 +229,36 @@ NIL
 0
 
 SLIDER
-20
-170
-280
-203
+45
+375
+305
+408
 interaction-distance
 interaction-distance
 1
 10
-2.0
+1.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-200
-450
-280
-495
-num-differentiated
+800
+650
+887
+695
+Differentiated
 count diffCells
 17
 1
 11
 
 SLIDER
-20
-260
-280
-293
+45
+465
+305
+498
 pluri-mitosis-threshold
 pluri-mitosis-threshold
 0
@@ -291,10 +270,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-20
+45
+510
 305
-280
-338
+543
 diff-mitosis-threshold
 diff-mitosis-threshold
 0
@@ -305,44 +284,22 @@ diff-mitosis-threshold
 NIL
 HORIZONTAL
 
-SWITCH
-20
-350
-280
-383
-show-energy
-show-energy
-1
-1
--1000
-
 MONITOR
-20
-450
-100
-495
-num-low
+637
+650
+709
+695
+Gata 6 Low
 count gataLows
 17
 1
 11
 
-MONITOR
-110
-450
-190
-495
-num-high
-count gataHighs
-17
-1
-11
-
 BUTTON
-110
-400
-192
-433
+477
+655
+552
+688
 Step
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
@@ -355,21 +312,11 @@ NIL
 NIL
 1
 
-CHOOSER
-20
-20
-145
-65
-model-type
-model-type
-"Schrode" "Guye"
-1
-
 BUTTON
-100
-510
-200
-543
+895
+655
+986
+688
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
@@ -383,29 +330,40 @@ NIL
 1
 
 SLIDER
-20
-215
-280
-248
+45
+420
+305
+453
 crowd-threshold
 crowd-threshold
 5
 100
-30.0
+5.0
 5
 1
 NIL
 HORIZONTAL
 
 CHOOSER
-160
-20
-285
-65
+185
+675
+310
+720
 record-type
 record-type
 "None" "View" "Interface"
-0
+1
+
+MONITOR
+719
+650
+791
+695
+Gata6 High
+count gataHighs
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
