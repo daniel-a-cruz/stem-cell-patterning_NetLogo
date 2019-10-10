@@ -31,11 +31,22 @@ to setup
 end
 
 to go
-  ask turtles [ set energy energy + 5 ]
-  singleCellmove
-  diff-pathway
-  diff-lowSurrounded
-  cell-division
+  ifelse synchronization [
+    ask turtles [ set energy energy + 5 ]
+    ask turtles [ singleCellmove ]
+    ask turtles [ diff-pathway ]
+    ask turtles [ diff-lowSurrounded ]
+    ask turtles [ cell-division ]
+  ]
+  [
+    ask turtles [
+      set energy energy + 5
+      singleCellmove
+      diff-pathway
+      diff-lowSurrounded
+      cell-division
+    ]
+  ]
   tick
 end
 
@@ -60,29 +71,36 @@ to move [ dist ]
 end
 
 to singleCellmove
-  ask turtles with [ motion ] [
+  if motion  [
     if breed = gataLows [
       rt random-float 360
-      move 1.5
+      move cell-speed
       if any? other gataLows in-radius 1.0 [
         set motion false
       ]
     ]
+
     if breed = gataHighs [
+      ifelse random-move [
+        rt random-float 360
+        move cell-speed
+      ]
+      [
         let nearest-diff min-one-of diffCells [ distance myself ]
         ifelse nearest-diff != nobody [
           face nearest-diff
-          move 1.5
+          move cell-speed
         ]
         [
           rt random-float 360
-          move 1.5
+          move cell-speed
         ]
       ]
+    ]
 
     if breed = diffCells [
       rt random-float 360
-      move 1.5
+      move cell-speed
       if any? other diffCells in-radius 1.0 [
         set motion false
       ]
@@ -91,7 +109,7 @@ to singleCellmove
 end
 
 to diff-pathway
-  ask gataHighs [
+  if breed = gataHighs [
     let crowd count gataLows in-radius interaction-distance
     if crowd > crowd-threshold [
       set breed diffCells
@@ -103,19 +121,21 @@ to diff-pathway
 end
 
 to diff-lowSurrounded
-  ask gataLows [
-    let crowd count diffCells in-radius 2 * interaction-distance
-    if crowd > 5 * crowd-threshold [
-      set breed diffCells
-      ;set color [0 0 255 125]
-      ;set color blue
-      set motion true
+  if diff-low [
+    if breed = gataLows [
+      let crowd count diffCells in-radius 2 * interaction-distance
+      if crowd > 5 * crowd-threshold [
+        set breed diffCells
+        ;set color [0 0 255 125]
+        set color blue
+        set motion true
+      ]
     ]
   ]
 end
 
 to cell-division
-  ask turtles with [ motion = false ] [
+  if motion = false [
     if breed = gataLows [
       if (energy > pluri-mitosis-threshold) [
         set energy (energy / 2)
@@ -138,10 +158,10 @@ to cell-division
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-387
-19
-1005
-638
+275
+10
+893
+629
 -1
 -1
 10.0
@@ -161,14 +181,14 @@ GRAPHICS-WINDOW
 1
 1
 1
-ticks
-30.0
+steps
+2.0
 
 SLIDER
-45
-285
-305
-318
+5
+135
+265
+168
 num-gataHigh
 num-gataHigh
 0
@@ -180,10 +200,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-45
-330
-305
-363
+5
+205
+265
+238
 num-gataLow
 num-gataLow
 0
@@ -195,10 +215,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-395
-655
-468
-688
+900
+495
+973
+528
 Initialize
 setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
@@ -212,10 +232,10 @@ NIL
 1
 
 BUTTON
-560
-655
-626
-688
+1065
+495
+1150
+528
 Run
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
@@ -229,14 +249,14 @@ NIL
 0
 
 SLIDER
-45
-375
-305
-408
+5
+420
+265
+453
 interaction-distance
 interaction-distance
 1
-10
+5
 1.0
 1
 1
@@ -244,10 +264,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-800
-650
-887
-695
+1065
+540
+1152
+585
 Differentiated
 count diffCells
 17
@@ -255,10 +275,10 @@ count diffCells
 11
 
 SLIDER
-45
-465
-305
-498
+5
+275
+265
+308
 pluri-mitosis-threshold
 pluri-mitosis-threshold
 0
@@ -270,10 +290,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-45
-510
-305
-543
+5
+345
+265
+378
 diff-mitosis-threshold
 diff-mitosis-threshold
 0
@@ -285,21 +305,21 @@ NIL
 HORIZONTAL
 
 MONITOR
-637
-650
-709
-695
-Gata 6 Low
+902
+540
+974
+585
+Gata6 Low
 count gataLows
 17
 1
 11
 
 BUTTON
-477
-655
-552
-688
+982
+495
+1057
+528
 Step
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
@@ -313,10 +333,10 @@ NIL
 1
 
 BUTTON
-895
-655
-986
-688
+975
+595
+1066
+628
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
@@ -330,14 +350,14 @@ NIL
 1
 
 SLIDER
-45
-420
-305
-453
+5
+505
+265
+538
 crowd-threshold
 crowd-threshold
 5
-100
+30
 5.0
 5
 1
@@ -345,25 +365,234 @@ NIL
 HORIZONTAL
 
 CHOOSER
-185
-675
-310
-720
+5
+575
+265
+620
 record-type
 record-type
 "None" "View" "Interface"
-1
+0
 
 MONITOR
-719
-650
-791
-695
+984
+540
+1056
+585
 Gata6 High
 count gataHighs
 17
 1
 11
+
+TEXTBOX
+75
+10
+255
+40
+Parameters
+20
+0.0
+1
+
+SLIDER
+5
+60
+265
+94
+cell-speed
+cell-speed
+0
+3
+1.0
+.5
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+965
+10
+1135
+40
+Assumptions
+20
+0.0
+1
+
+SWITCH
+900
+75
+1150
+108
+synchronization
+synchronization
+1
+1
+-1000
+
+SWITCH
+900
+165
+1150
+198
+random-move
+random-move
+1
+1
+-1000
+
+TEXTBOX
+905
+50
+1150
+68
+Synchronized or individual cell update?
+13
+0.0
+1
+
+TEXTBOX
+900
+140
+1150
+158
+Movement: Random or Guye model?
+13
+0.0
+1
+
+TEXTBOX
+900
+225
+1150
+256
+Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
+13
+0.0
+1
+
+SWITCH
+900
+270
+1150
+303
+diff-low
+diff-low
+0
+1
+-1000
+
+TEXTBOX
+900
+330
+1150
+360
+FGF/ERK Signaling via protein dumping or individual interactions?
+13
+0.0
+1
+
+SWITCH
+900
+370
+1150
+403
+dump-signaling
+dump-signaling
+1
+1
+-1000
+
+TEXTBOX
+930
+455
+1145
+475
+Controls + Monitors
+20
+0.0
+1
+
+TEXTBOX
+10
+40
+260
+58
+Cell speed
+13
+0.0
+1
+
+TEXTBOX
+10
+115
+260
+133
+Number of initial Gata6 High Cells
+13
+0.0
+1
+
+TEXTBOX
+10
+185
+260
+205
+Number of intiial Gata6 Low Cells
+13
+0.0
+1
+
+TEXTBOX
+10
+325
+260
+343
+Mitosis threshold for pluripotent cells
+13
+0.0
+1
+
+TEXTBOX
+10
+255
+260
+273
+Mitosis threshold for differentiated cells\t
+13
+0.0
+1
+
+TEXTBOX
+10
+400
+265
+418
+Interaction distance for FGF/ERK Signaling
+13
+0.0
+1
+
+TEXTBOX
+10
+470
+260
+500
+Crowd threshold when differentiating Gata6 Low cells near differentiated cells
+13
+0.0
+1
+
+TEXTBOX
+10
+555
+260
+573
+Video Record Type
+13
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
