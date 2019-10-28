@@ -1,55 +1,101 @@
 extensions [vid]
-breed [ gataHighs gataHigh ]
-breed [ gataLows gataLow ]
-breed [ diffCells diffCell]
+breed [ cells cell ]
+;breed [ gataHighs gataHigh ]
+;breed [ gataLows gataLow ]
+;breed [ diffCells diffCell]
 
-
-turtles-own [ motion energy ]
+turtles-own [ motion pluri divTrack diffTrack FGFR ERK GATA6 NANOG ]
+patches-own [ FGF4 ]
+;turtles-own [ motion divTrack ]
 
 to setup
   clear-all
   vid:reset-recorder
 
-  set-default-shape turtles "dot"
+  set-default-shape turtles "circle"
 
-  create-gataHighs (num-gataHigh) [
-    setxy random-xcor random-ycor
-    set color yellow
-    set motion true
-    set energy random (pluri-mitosis-threshold)
+  ask patches [
+    set FGF4 0
   ]
 
-  create-gataLows (num-gataLow) [
+  create-cells (numGataLow) [
     setxy random-xcor random-ycor
-    ;set color [255 0 0 125]
+    set motion true
+    set pluri true
+    set divTrack random (pluriMitosisThreshold)
+    set diffTrack random (diffThresh)
+    set FGFR 0
+    set ERK 0
+    ; The setup below sets this cell as Gata6 Low
+    set GATA6 0
+    set NANOG 1
+    set color green
+  ]
+
+  create-cells (numGataHigh) [
+    setxy random-xcor random-ycor
+    set motion true
+    set pluri true
+    set divTrack random (pluriMitosisThreshold)
+    set diffTrack random (diffThresh)
+    set FGFR 0
+    set ERK 0
+    ; The setup below sets this cell as Gata6 High
+    set GATA6 1
+    set NANOG 0
     set color red
-    set motion true
-    set energy random (pluri-mitosis-threshold)
   ]
 
-  showEnergy
+;  create-gataHighs (numGataHigh) [
+;    setxy random-xcor random-ycor
+;    set color yellow
+;    set motion true
+;    set divTrack random (pluriMitosisThreshold)
+;  ]
+
+;  create-gataLows (numGataLow) [
+;    setxy random-xcor random-ycor
+;    ;set color [255 0 0 125]
+;    set color red
+;    set motion true
+;    set divTrack random (pluriMitosisThreshold)
+;  ]
+
   reset-ticks
 end
 
 to go
-  ask turtles [ set energy energy + 5 ]
-  singleCellmove
-  diff-highNeedsLow
-  diff-lowSurrounded
-  cell-division
+  ifelse synchronization [
+    ask cells [ set divTrack divTrack + 5 ]
+    ask cells [ single-cell-move ]
+    ask cells [ FE-pathway ]
+    ask cells [ diff-low-surrounded ]
+    ask cells [ cell-division ]
+    ask cells [ color-update ]
+  ]
+  [
+    ask cells [
+      set divTrack divTrack + 5
+      single-cell-move
+      FE-pathway
+      diff-low-surrounded
+      cell-division
+      color-update
+    ]
+  ]
   tick
-  showEnergy
 end
 
+; Cone movement, currently not in use
 to move [ dist ]
   if dist >= .25 [
-    let obs count turtles in-cone 1 60
-    ifelse obs <= 5 [
+    let obs count cells in-cone 1 60
+    ifelse obs <= crowdThreshold [
       fd dist
     ]
     [
       let angle random-float 30
-      let temp random 1
+      let temp random 2
       ifelse temp = 1 [
         rt 30 + angle
       ]
@@ -61,111 +107,226 @@ to move [ dist ]
   ]
 end
 
-to singleCellmove
-  ask turtles with [ motion ] [
-    if breed = gataLows [
-      rt random-float 360
-      move 2
-      if any? other gataLows in-radius 1.0 [
-        set motion false
+to single-cell-move
+  if motion [
+    ifelse (NANOG = 0) and (GATA6 = 1) and (pluri = true) [
+      ifelse randomMove [
+        rt random-float 360
+        move cellSpeed
       ]
-    ]
-    if breed = gataHighs [
-      if model-type = "Schrode" [
-        let nearest-gataLow min-one-of gataLows [ distance myself ]
-        face nearest-gataLow
-        move 2
-      ]
-
-      if model-type = "Guye" [
-        let nearest-diff min-one-of diffCells [ distance myself ]
-        ifelse nearest-diff != nobody [
-          face nearest-diff
-          move 2
+      [
+        let nearestDiff min-one-of cells with [pluri = false ] [ distance myself ]
+        ifelse nearestDiff != nobody [
+          face nearestDiff
+          move cellSpeed
         ]
         [
-          let nearest-gataLow min-one-of gataLows [ distance myself ]
-          face nearest-gataLow
-          move 2
+          rt random-float 360
+          move cellSpeed
         ]
       ]
     ]
-
-    if breed = diffCells [
+    [
       rt random-float 360
-      move 2
-      if any? other diffCells in-radius 1.0 [
+      move cellSpeed
+    ]
+
+    if (pluri = false) [
+      if any? other cells with [ pluri = false ] in-radius 1.0 [
+        set motion false
+      ]
+    ]
+
+    if (NANOG = 1) and (GATA6 = 0) and (pluri = true) [
+      if any? other cells with [ (NANOG = 1) and (GATA6 = 0) and (pluri = true) ] in-radius 1.0 [
         set motion false
       ]
     ]
   ]
+
+;  if motion  [
+;    if breed = gataLows [
+;      rt random-float 360
+;      move cellSpeed
+;      if any? other gataLows in-radius 1.0 [
+;        set motion false
+;      ]
+;    ]
+
+;    if breed = gataHighs [
+;      ifelse randomMove [
+;        rt random-float 360
+;        move cellSpeed
+;      ]
+;      [
+;        let nearestDiff min-one-of diffCells [ distance myself ]
+;        ifelse nearestDiff != nobody [
+;          face nearestDiff
+;          move cellSpeed
+;        ]
+;        [
+;          rt random-float 360
+;          move cellSpeed
+;        ]
+;      ]
+;    ]
+
+;    if breed = diffCells [
+;      rt random-float 360
+;      move cellSpeed
+;      if any? other diffCells in-radius 1.0 [
+;        set motion false
+;      ]
+;    ]
+;  ]
 end
 
-to diff-highNeedsLow
-  ask gataHighs [
-    let crowd count gataLows in-radius interaction-distance
-    if crowd > crowd-threshold [
-      set breed diffCells
-      set color blue
-      set motion true
+to FE-pathway
+
+  let boolFGF4 0
+  let tempFGFR FGFR
+  let tempERK ERK
+  let tempNANOG NANOG
+  let tempGATA6 GATA6
+
+  ask patch-here [
+    if FGF4 > 0 [
+      set boolFGF4 1
+    ]
+    if tempNANOG = 1 [
+      set FGF4 FGF4 + 1
     ]
   ]
+
+  set FGFR (boolFGF4 * tempGATA6)
+  set ERK (tempFGFR)
+  set GATA6 (1 - tempNANOG)
+  set NANOG ((1 - tempERK) * (1 - tempGATA6))
+
+  if FGFR = 1 [
+    ask patch-here [ set FGF4 FGF4 - 1 ]
+  ]
+
+  if (GATA6 = 1) and (pluri = true) [
+    set diffTrack diffTrack + 1
+    if diffTrack > diffThresh [
+      set motion true
+      set pluri false
+      set color blue
+    ]
+  ]
+
+;  if breed = gataHighs [
+;    let crowd count gataLows in-radius interactionDistance
+;    if crowd > crowdThreshold [
+;      set breed diffCells
+;      ;set color [0 0 255 125]
+;      set color blue
+;      set motion true
+;    ]
+;  ]
 end
 
-to diff-lowSurrounded
-  ask gataLows [
-    let crowd count diffCells in-radius interaction-distance
-    if crowd > 1.5 * crowd-threshold [
-      set breed diffCells
-      set color blue
-      set motion true
+to diff-low-surrounded
+  if diffLowSurr [
+    if (NANOG = true) and (GATA6 = false) and (pluri = true) [
+      let crowd count cells with [ pluri = false ] in-radius interactionDistance
+      if crowd > crowdThreshold [
+        set diffTrack diffTrack + 1
+        if diffTrack > diffThresh [
+          set motion true
+          set pluri false
+          set color blue
+        ]
+      ]
     ]
   ]
+
+;  if diffLowSurr [
+;    if breed = gataLows [
+;      let crowd count diffCells in-radius 2 * interactionDistance
+;      if crowd > 5 * crowdThreshold [
+;        set breed diffCells
+;        ;set color [0 0 255 125]
+;        set color blue
+;        set motion true
+;      ]
+;    ]
+;  ]
 end
 
 to cell-division
-  ask turtles with [ motion = false ] [
-    if breed = gataLows [
-      if (energy > pluri-mitosis-threshold) [
-        set energy (energy / 2)
+  if motion = false [
+    ifelse pluri = false [
+      if (divTrack > diffMitosisThreshold) [
+        set divTrack (divTrack / 2)
         hatch 1 [
           rt random-float 360
-          move .5
+          move cellSpeed
         ]
       ]
     ]
-    if breed = diffCells [
-      if (energy > diff-mitosis-threshold) [
-        set energy (energy / 2)
+    [
+      if (divTrack > pluriMitosisThreshold) [
+        set divTrack (divTrack / 2)
         hatch 1 [
           rt random-float 360
-          move .5
+          move cellSpeed
         ]
       ]
     ]
   ]
+
+;  if motion = false [
+;    if breed = gataLows [
+;      if (divTrack > pluriMitosisThreshold) [
+;        set divTrack (divTrack / 2)
+;        hatch 1 [
+;          rt random-float 360
+;          move .5
+;        ]
+;      ]
+;    ]
+;    if breed = diffCells [
+;      if (divTrack > diffMitosisThreshold) [
+;        set divTrack (divTrack / 2)
+;        hatch 1 [
+;          rt random-float 360
+;          move .5
+;        ]
+;      ]
+;    ]
+;  ]
 end
 
-to showEnergy
-  ask turtles [
-    set label ""
+to color-update
+  ifelse pluri = false [
+    set color blue
   ]
-
-  if show-energy [
-    ask turtles [
-      set label energy
+  [
+    if (NANOG = true) and (GATA6 = false) [
+      set color green
+    ]
+    if (NANOG = false) and (GATA6 = true) [
+      set color red
+    ]
+    if (NANOG = true) and (GATA6 = true) [
+      set color yellow
+    ]
+    if (NANOG = false) and (GATA6 = false) [
+      set color yellow
     ]
   ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-387
-19
-1005
-638
+275
+10
+889
+625
 -1
 -1
-10.0
+6.0
 1
 15
 1
@@ -175,38 +336,38 @@ GRAPHICS-WINDOW
 0
 0
 1
--30
-30
--30
-30
+-50
+50
+-50
+50
+0
+0
 1
-1
-1
-ticks
-30.0
+steps
+2.0
 
 SLIDER
-20
-80
-280
-113
-num-gataHigh
-num-gataHigh
+5
+135
+265
+168
+numGataHigh
+numGataHigh
 0
 1000
-100.0
+500.0
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-20
-125
-280
-158
-num-gataLow
-num-gataLow
+5
+205
+265
+238
+numGataLow
+numGataLow
 0
 1000
 500.0
@@ -216,10 +377,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-20
-400
-100
-433
+900
+495
+973
+528
 Initialize
 setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
@@ -233,10 +394,10 @@ NIL
 1
 
 BUTTON
-202
-400
-274
-433
+1065
+495
+1150
+528
 Run
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
@@ -250,53 +411,53 @@ NIL
 0
 
 SLIDER
-20
-170
-280
-203
-interaction-distance
-interaction-distance
+5
+420
+265
+453
+interactionDistance
+interactionDistance
 1
-10
-2.0
+5
+3.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-200
-450
-280
-495
-num-differentiated
-count diffCells
+630
+645
+715
+690
+Differentiated
+count cells with [ color = blue ]
 17
 1
 11
 
 SLIDER
-20
-260
-280
-293
-pluri-mitosis-threshold
-pluri-mitosis-threshold
+5
+275
+265
+308
+pluriMitosisThreshold
+pluriMitosisThreshold
 0
 500
-50.0
+75.0
 5
 1
 NIL
 HORIZONTAL
 
 SLIDER
-20
-305
-280
-338
-diff-mitosis-threshold
-diff-mitosis-threshold
+5
+345
+265
+378
+diffMitosisThreshold
+diffMitosisThreshold
 0
 500
 100.0
@@ -305,44 +466,22 @@ diff-mitosis-threshold
 NIL
 HORIZONTAL
 
-SWITCH
-20
-350
-280
-383
-show-energy
-show-energy
-1
-1
--1000
-
 MONITOR
-20
-450
-100
+410
+645
 495
-num-low
-count gataLows
-17
-1
-11
-
-MONITOR
-110
-450
-190
-495
-num-high
-count gataHighs
+690
+Gata6 Low
+count cells with [ color = green ]
 17
 1
 11
 
 BUTTON
-110
-400
-192
-433
+982
+495
+1057
+528
 Step
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
@@ -355,21 +494,11 @@ NIL
 NIL
 1
 
-CHOOSER
-20
-20
-145
-65
-model-type
-model-type
-"Schrode" "Guye"
-1
-
 BUTTON
-100
-510
-200
-543
+970
+540
+1075
+580
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
@@ -383,29 +512,295 @@ NIL
 1
 
 SLIDER
-20
-215
-280
-248
-crowd-threshold
-crowd-threshold
 5
-100
-30.0
+505
+265
+538
+crowdThreshold
+crowdThreshold
+5
+30
+10.0
 5
 1
 NIL
 HORIZONTAL
 
 CHOOSER
-160
-20
-285
-65
+900
+395
+1150
+440
 record-type
 record-type
 "None" "View" "Interface"
 0
+
+MONITOR
+520
+645
+605
+690
+Gata6 High
+count cells with [ color = red ]
+17
+1
+11
+
+TEXTBOX
+75
+10
+255
+40
+Parameters
+20
+0.0
+1
+
+SLIDER
+5
+60
+265
+93
+cellSpeed
+cellSpeed
+0
+5
+3.0
+.5
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+965
+10
+1135
+40
+Assumptions
+20
+0.0
+1
+
+SWITCH
+900
+75
+1150
+108
+synchronization
+synchronization
+1
+1
+-1000
+
+SWITCH
+900
+150
+1150
+183
+randomMove
+randomMove
+1
+1
+-1000
+
+TEXTBOX
+905
+50
+1150
+68
+Synchronized or individual cell update?
+13
+0.0
+1
+
+TEXTBOX
+900
+125
+1150
+143
+Movement: Random or Guye model?
+13
+0.0
+1
+
+TEXTBOX
+900
+200
+1150
+231
+Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
+13
+0.0
+1
+
+SWITCH
+900
+245
+1150
+278
+diffLowSurr
+diffLowSurr
+0
+1
+-1000
+
+TEXTBOX
+900
+290
+1150
+320
+FGF/ERK Signaling via protein dumping or individual interactions?
+13
+0.0
+1
+
+SWITCH
+900
+330
+1150
+363
+dumpSignaling
+dumpSignaling
+1
+1
+-1000
+
+TEXTBOX
+985
+455
+1145
+475
+Controls
+20
+0.0
+1
+
+TEXTBOX
+10
+40
+260
+58
+Cell speed
+13
+0.0
+1
+
+TEXTBOX
+10
+115
+260
+133
+Number of initial Gata6 High Cells
+13
+0.0
+1
+
+TEXTBOX
+10
+185
+260
+205
+Number of intiial Gata6 Low Cells
+13
+0.0
+1
+
+TEXTBOX
+10
+325
+260
+343
+Mitosis threshold for pluripotent cells
+13
+0.0
+1
+
+TEXTBOX
+10
+255
+260
+273
+Mitosis threshold for differentiated cells\t
+13
+0.0
+1
+
+TEXTBOX
+10
+400
+265
+416
+Interaction distance for determining a crowd
+13
+0.0
+1
+
+TEXTBOX
+10
+470
+260
+500
+Crowd threshold when differentiating Gata6 Low cells near differentiated cells
+13
+0.0
+1
+
+TEXTBOX
+905
+375
+1150
+393
+Video Record Type
+13
+0.0
+1
+
+TEXTBOX
+10
+560
+250
+578
+Threshold for differentiating cells
+13
+0.0
+1
+
+SLIDER
+5
+580
+265
+613
+diffThresh
+diffThresh
+1
+15
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+740
+645
+825
+690
+Other Cells
+count cells with [ color = yellow ]
+17
+1
+11
+
+TEXTBOX
+280
+650
+380
+671
+Monitors:
+20
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
