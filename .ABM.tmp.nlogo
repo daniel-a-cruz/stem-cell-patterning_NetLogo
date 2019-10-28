@@ -23,7 +23,7 @@ to setup
     set motion true
     set pluri true
     set divTrack random (pluriMitosisThreshold)
-    set diffTrack random (diffThresh)
+    set diffTrack random (diffRate)
     set FGFR 0
     set ERK 0
     ; The setup below sets this cell as Gata6 Low
@@ -37,7 +37,7 @@ to setup
     set motion true
     set pluri true
     set divTrack random (pluriMitosisThreshold)
-    set diffTrack random (diffThresh)
+    set diffTrack random (diffRate)
     set FGFR 0
     set ERK 0
     ; The setup below sets this cell as Gata6 High
@@ -209,7 +209,7 @@ to FE-pathway
 
   if (GATA6 = 1) and (pluri = true) [
     set diffTrack diffTrack + 1
-    if diffTrack > diffThresh [
+    if diffTrack > diffRate [
       set motion true
       set pluri false
       set color blue
@@ -233,7 +233,7 @@ to diff-low-surrounded
       let crowd count cells with [ pluri = false ] in-radius interactionDistance
       if crowd > crowdThreshold [
         set diffTrack diffTrack + 1
-        if diffTrack > diffThresh [
+        if diffTrack > diffRate [
           set motion true
           set pluri false
           set color blue
@@ -771,11 +771,11 @@ SLIDER
 580
 265
 613
-diffThresh
-diffThresh
+diffRate
+diffRate
 1
 15
-5.0
+15.0
 1
 1
 NIL
