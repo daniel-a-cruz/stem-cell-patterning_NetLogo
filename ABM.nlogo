@@ -46,21 +46,6 @@ to setup
     set color red
   ]
 
-;  create-gataHighs (numGataHigh) [
-;    setxy random-xcor random-ycor
-;    set color yellow
-;    set motion true
-;    set divTrack random (pluriMitosisThreshold)
-;  ]
-
-;  create-gataLows (numGataLow) [
-;    setxy random-xcor random-ycor
-;    ;set color [255 0 0 125]
-;    set color red
-;    set motion true
-;    set divTrack random (pluriMitosisThreshold)
-;  ]
-
   reset-ticks
 end
 
@@ -68,7 +53,14 @@ to go
   ifelse synchronization [
     ask cells [ set divTrack divTrack + 5 ]
     ask cells [ single-cell-move ]
-    ask cells [ FE-pathway ]
+    ask cells [
+      ifelse diffInteract [
+        FE-pathway
+      ]
+      [
+        if pluri [ FE-pathway ]
+      ]
+    ]
     ask cells [ diff-low-surrounded ]
     ask cells [ cell-division ]
     ask cells [ color-update ]
@@ -77,10 +69,20 @@ to go
     ask cells [
       set divTrack divTrack + 5
       single-cell-move
-      FE-pathway
+      ifelse diffInteract [
+        FE-pathway
+      ]
+      [
+        if pluri [ FE-pathway ]
+      ]
       diff-low-surrounded
       cell-division
       color-update
+    ]
+  ]
+  ask patches [
+    if FGF4 > 0 [
+      set FGF4 FGF4 - 1
     ]
   ]
   tick
@@ -109,7 +111,7 @@ end
 
 to single-cell-move
   if motion [
-    ifelse (NANOG = 0) and (GATA6 = 1) and (pluri = true) [
+    ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
       ifelse randomMove [
         rt random-float 360
         fd cellSpeed
@@ -131,58 +133,29 @@ to single-cell-move
       fd cellSpeed
     ]
 
-    if (pluri = false) [
+    if not pluri [
       if any? other cells with [ pluri = false ] in-radius 1.0 [
         set motion false
       ]
     ]
 
-    if (NANOG = 1) and (GATA6 = 0) and (pluri = true) [
+    if (NANOG = 1) and (GATA6 = 0) and pluri [
       if any? other cells with [ (NANOG = 1) and (GATA6 = 0) and (pluri = true) ] in-radius 1.0 [
         set motion false
       ]
     ]
   ]
+end
 
-;  if motion  [
-;    if breed = gataLows [
-;      rt random-float 360
-;      move cellSpeed
-;      if any? other gataLows in-radius 1.0 [
-;        set motion false
-;      ]
-;    ]
-
-;    if breed = gataHighs [
-;      ifelse randomMove [
-;        rt random-float 360
-;        move cellSpeed
-;      ]
-;      [
-;        let nearestDiff min-one-of diffCells [ distance myself ]
-;        ifelse nearestDiff != nobody [
-;          face nearestDiff
-;          move cellSpeed
-;        ]
-;        [
-;          rt random-float 360
-;          move cellSpeed
-;        ]
-;      ]
-;    ]
-
-;    if breed = diffCells [
-;      rt random-float 360
-;      move cellSpeed
-;      if any? other diffCells in-radius 1.0 [
-;        set motion false
-;      ]
-;    ]
-;  ]
+to differentiate
+  set motion true
+  set pluri false
+  set color blue
+  set GATA6 1
+  set NANOG 0
 end
 
 to FE-pathway
-
   let boolFGF4 0
   let tempFGFR FGFR
   let tempERK ERK
@@ -193,7 +166,7 @@ to FE-pathway
     if FGF4 > 0 [
       set boolFGF4 1
     ]
-    if tempNANOG = 1 [
+    if (tempNANOG = 1) and (FGF4 < maxFGF4) [
       set FGF4 FGF4 + 1
     ]
   ]
@@ -203,61 +176,36 @@ to FE-pathway
   set GATA6 (1 - tempNANOG)
   set NANOG ((1 - tempERK) * (1 - tempGATA6))
 
-  if FGFR = 1 [
+  if (tempFGFR = 0) and (FGFR = 1) [
     ask patch-here [ set FGF4 FGF4 - 1 ]
   ]
 
-  if (GATA6 = 1) and (pluri = true) [
+  ifelse (GATA6 = 1) and pluri [
     set diffTrack diffTrack + 1
-    if diffTrack > diffThresh [
-      set motion true
-      set pluri false
-      set color blue
-    ]
+    if diffTrack >= diffThresh [ differentiate ]
+  ]
+  [
+    set diffTrack 0
   ]
 
-;  if breed = gataHighs [
-;    let crowd count gataLows in-radius interactionDistance
-;    if crowd > crowdThreshold [
-;      set breed diffCells
-;      ;set color [0 0 255 125]
-;      set color blue
-;      set motion true
-;    ]
-;  ]
 end
 
 to diff-low-surrounded
   if diffLowSurr [
-    if (NANOG = true) and (GATA6 = false) and (pluri = true) [
+    if (NANOG = 1) and (GATA6 = 0) and pluri [
       let crowd count cells with [ pluri = false ] in-radius interactionDistance
       if crowd > crowdThreshold [
         set diffTrack diffTrack + 1
-        if diffTrack > diffThresh [
-          set motion true
-          set pluri false
-          set color blue
-        ]
+        if diffTrack >= diffThresh [ differentiate ]
+        ;differentiate
       ]
     ]
   ]
-
-;  if diffLowSurr [
-;    if breed = gataLows [
-;      let crowd count diffCells in-radius 2 * interactionDistance
-;      if crowd > 5 * crowdThreshold [
-;        set breed diffCells
-;        ;set color [0 0 255 125]
-;        set color blue
-;        set motion true
-;      ]
-;    ]
-;  ]
 end
 
 to cell-division
-  if motion = false [
-    ifelse pluri = false [
+  if not motion [
+    ifelse not pluri [
       if (divTrack > diffMitosisThreshold) [
         set divTrack (divTrack / 2)
         hatch 1 [
@@ -276,44 +224,23 @@ to cell-division
       ]
     ]
   ]
-
-;  if motion = false [
-;    if breed = gataLows [
-;      if (divTrack > pluriMitosisThreshold) [
-;        set divTrack (divTrack / 2)
-;        hatch 1 [
-;          rt random-float 360
-;          move .5
-;        ]
-;      ]
-;    ]
-;    if breed = diffCells [
-;      if (divTrack > diffMitosisThreshold) [
-;        set divTrack (divTrack / 2)
-;        hatch 1 [
-;          rt random-float 360
-;          move .5
-;        ]
-;      ]
-;    ]
-;  ]
 end
 
 to color-update
-  ifelse pluri = false [
+  ifelse not pluri [
     set color blue
   ]
   [
-    if (NANOG = true) and (GATA6 = false) [
+    if (NANOG = 1) and (GATA6 = 0) [
       set color green
     ]
-    if (NANOG = false) and (GATA6 = true) [
+    if (NANOG = 0) and (GATA6 = 1) [
       set color red
     ]
-    if (NANOG = true) and (GATA6 = true) [
+    if (NANOG = 1) and (GATA6 = 1) [
       set color yellow
     ]
-    if (NANOG = false) and (GATA6 = false) [
+    if (NANOG = 0) and (GATA6 = 0) [
       set color yellow
     ]
   ]
@@ -340,8 +267,8 @@ GRAPHICS-WINDOW
 50
 -50
 50
-0
-0
+1
+1
 1
 steps
 2.0
@@ -355,7 +282,7 @@ numGataHigh
 numGataHigh
 0
 1000
-500.0
+900.0
 10
 1
 NIL
@@ -370,7 +297,7 @@ numGataLow
 numGataLow
 0
 1000
-500.0
+100.0
 10
 1
 NIL
@@ -520,7 +447,7 @@ crowdThreshold
 crowdThreshold
 5
 30
-10.0
+15.0
 5
 1
 NIL
@@ -649,8 +576,8 @@ TEXTBOX
 900
 290
 1150
-320
-FGF/ERK Signaling via protein dumping or individual interactions?
+321
+Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
 13
 0.0
 1
@@ -660,9 +587,9 @@ SWITCH
 330
 1150
 363
-dumpSignaling
-dumpSignaling
-1
+diffInteract
+diffInteract
+0
 1
 -1000
 
@@ -730,7 +657,7 @@ TEXTBOX
 10
 400
 265
-416
+418
 Interaction distance for determining a crowd
 13
 0.0
@@ -760,8 +687,8 @@ TEXTBOX
 10
 560
 250
-578
-Threshold for differentiating cells
+591
+Threshold (in steps) for differentiating cells
 13
 0.0
 1
@@ -775,7 +702,7 @@ diffThresh
 diffThresh
 1
 15
-5.0
+4.0
 1
 1
 NIL
@@ -799,6 +726,31 @@ TEXTBOX
 671
 Monitors:
 20
+0.0
+1
+
+SLIDER
+5
+655
+265
+688
+maxFGF4
+maxFGF4
+1
+5
+3.0
+1
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+10
+635
+260
+653
+Maximum FGF4 stored on a patch
+13
 0.0
 1
 
