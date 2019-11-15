@@ -1,16 +1,16 @@
 extensions [vid]
 breed [ cells cell ]
-;breed [ gataHighs gataHigh ]
-;breed [ gataLows gataLow ]
-;breed [ diffCells diffCell]
+
+globals [ switch ]
 
 turtles-own [ motion pluri divTrack diffTrack FGFR ERK GATA6 NANOG ]
 patches-own [ FGF4 ]
-;turtles-own [ motion divTrack ]
 
 to setup
   clear-all
   vid:reset-recorder
+
+  set switch 0
 
   set-default-shape turtles "circle"
 
@@ -144,6 +144,12 @@ to single-cell-move
         set motion false
       ]
     ]
+
+    ;if (NANOG = 0) and (GATA6 = 1) and pluri [
+    ;  if any? other cells with [ (NANOG = 0) and (GATA6 = 1) and (pluri = true) ] in-radius 1.0 [
+    ;    set motion false
+    ;  ]
+    ;]
   ]
 end
 
@@ -188,6 +194,9 @@ to FE-pathway
     set diffTrack 0
   ]
 
+  if tempGATA6 != GATA6 [
+    set switch switch + 1
+  ]
 end
 
 to diff-low-surrounded
@@ -196,8 +205,8 @@ to diff-low-surrounded
       let crowd count cells with [ pluri = false ] in-radius interactionDistance
       if crowd > crowdThreshold [
         set diffTrack diffTrack + 1
-        if diffTrack >= diffThresh [ differentiate ]
-        ;differentiate
+        ;if diffTrack >= diffThresh [ differentiate ]
+        differentiate
       ]
     ]
   ]
@@ -282,7 +291,7 @@ numGataHigh
 numGataHigh
 0
 1000
-900.0
+500.0
 10
 1
 NIL
@@ -297,7 +306,7 @@ numGataLow
 numGataLow
 0
 1000
-100.0
+500.0
 10
 1
 NIL
@@ -346,16 +355,16 @@ interactionDistance
 interactionDistance
 1
 5
-3.0
+2.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-630
+535
 645
-715
+620
 690
 Differentiated
 count cells with [ color = blue ]
@@ -394,9 +403,9 @@ NIL
 HORIZONTAL
 
 MONITOR
-410
+315
 645
-495
+400
 690
 Gata6 Low
 count cells with [ color = green ]
@@ -464,9 +473,9 @@ record-type
 0
 
 MONITOR
-520
+425
 645
-605
+510
 690
 Gata6 High
 count cells with [ color = red ]
@@ -589,7 +598,7 @@ SWITCH
 363
 diffInteract
 diffInteract
-0
+1
 1
 -1000
 
@@ -702,16 +711,16 @@ diffThresh
 diffThresh
 1
 15
-4.0
+15.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-740
 645
-825
+645
+730
 690
 Other Cells
 count cells with [ color = yellow ]
@@ -720,11 +729,11 @@ count cells with [ color = yellow ]
 11
 
 TEXTBOX
-280
-650
-380
-671
-Monitors:
+540
+710
+625
+731
+Monitors
 20
 0.0
 1
@@ -738,7 +747,7 @@ maxFGF4
 maxFGF4
 1
 5
-3.0
+2.0
 1
 1
 NIL
@@ -753,6 +762,17 @@ Maximum FGF4 stored on a patch
 13
 0.0
 1
+
+MONITOR
+755
+645
+840
+690
+Switches
+switch
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
