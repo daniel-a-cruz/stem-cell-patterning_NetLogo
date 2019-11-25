@@ -1,7 +1,7 @@
 extensions [vid]
 breed [ cells cell ]
 
-globals [ switch ]
+globals [ altcount bhGain bhLoss blGain blLoss nhGain nhLoss ghGain ghLoss ]
 
 turtles-own [ motion pluri divTrack diffTrack FGFR ERK GATA6 NANOG ]
 patches-own [ FGF4 ]
@@ -10,26 +10,45 @@ to setup
   clear-all
   vid:reset-recorder
 
-  set switch 0
+  set altcount 0
+  set bhGain 0
+  set bhLoss 0
+  set blGain 0
+  set blLoss 0
+  set nhGain 0
+  set nhLoss 0
+  set ghGain 0
+  set ghLoss 0
 
   set-default-shape turtles "circle"
 
   ask patches [
-    set FGF4 0
+    ifelse (stochastic = "FGF4") or (stochastic = "All") [
+      set FGF4 random (maxFGF4)
+    ]
+    [
+      set FGF4 0
+    ]
   ]
 
-  create-cells (numGataLow) [
+  create-cells (numNanogHigh) [
     setxy random-xcor random-ycor
     set motion true
     set pluri true
     set divTrack random (pluriMitosisThreshold)
     set diffTrack random (diffThresh)
-    set FGFR 0
-    set ERK 0
+    ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
+      set FGFR random 2
+      set ERK random 2
+    ]
+    [
+      set FGFR 0
+      set ERK 0
+    ]
     ; The setup below sets this cell as Gata6 Low
     set GATA6 0
     set NANOG 1
-    set color green
+    set color lime
   ]
 
   create-cells (numGataHigh) [
@@ -38,8 +57,14 @@ to setup
     set pluri true
     set divTrack random (pluriMitosisThreshold)
     set diffTrack random (diffThresh)
-    set FGFR 0
-    set ERK 0
+    ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
+      set FGFR random 2
+      set ERK random 2
+    ]
+    [
+      set FGFR 0
+      set ERK 0
+    ]
     ; The setup below sets this cell as Gata6 High
     set GATA6 1
     set NANOG 0
@@ -50,42 +75,58 @@ to setup
 end
 
 to go
-  ifelse synchronization [
-    ask cells [ set divTrack divTrack + 5 ]
-    ask cells [ single-cell-move ]
-    ask cells [
-      ifelse diffInteract [
-        FE-pathway
-      ]
-      [
-        if pluri [ FE-pathway ]
-      ]
+  set bhGain 0
+  set bhLoss 0
+  set blGain 0
+  set blLoss 0
+  set nhGain 0
+  set nhLoss 0
+  set ghGain 0
+  set ghLoss 0
+
+  ;ifelse synchronization [
+  ;  ask cells [ set divTrack divTrack + 5 ]
+  ;  ask cells [ single-cell-move ]
+  ;  ask cells [
+  ;    ifelse diffInteract [
+  ;      FE-pathway
+  ;    ]
+  ;    [
+  ;      if pluri [ FE-pathway ]
+  ;    ]
+  ;  ]
+  ;  ask cells [ diff-low-surrounded ]
+  ;  ask cells [ cell-division ]
+  ;  ask cells [ color-update ]
+  ;]
+  ;[
+  ask cells [
+    set divTrack divTrack + 5
+    single-cell-move
+    ifelse diffInteract [
+      FE-pathway
     ]
-    ask cells [ diff-low-surrounded ]
-    ask cells [ cell-division ]
-    ask cells [ color-update ]
-  ]
-  [
-    ask cells [
-      set divTrack divTrack + 5
-      single-cell-move
-      ifelse diffInteract [
-        FE-pathway
-      ]
-      [
-        if pluri [ FE-pathway ]
-      ]
-      diff-low-surrounded
-      cell-division
-      color-update
+    [
+      if pluri [ FE-pathway ]
     ]
+    diff-low-surrounded
+    spontaneous-diff
+    cell-division
+    color-update
   ]
+  ;]
+
   ask patches [
     if FGF4 > 0 [
       set FGF4 FGF4 - 1
     ]
   ]
+
   tick
+
+  let ylw count cells with [ color = yellow ]
+  let blu count cells with [ color = sky ]
+  set altcount (ylw + blu)
 end
 
 ; Cone movement, currently not in use
@@ -111,7 +152,8 @@ end
 
 to single-cell-move
   if motion [
-    ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
+    ;ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
+    ifelse (GATA6 = 1) and pluri [
       ifelse randomMove [
         rt random-float 360
         fd cellSpeed
@@ -144,19 +186,13 @@ to single-cell-move
         set motion false
       ]
     ]
-
-    ;if (NANOG = 0) and (GATA6 = 1) and pluri [
-    ;  if any? other cells with [ (NANOG = 0) and (GATA6 = 1) and (pluri = true) ] in-radius 1.0 [
-    ;    set motion false
-    ;  ]
-    ;]
   ]
 end
 
 to differentiate
   set motion true
   set pluri false
-  set color blue
+  set color white
   set GATA6 1
   set NANOG 0
 end
@@ -172,15 +208,26 @@ to FE-pathway
     if FGF4 > 0 [
       set boolFGF4 1
     ]
+    ; Boolean function for FGF4
     if (tempNANOG = 1) and (FGF4 < maxFGF4) [
       set FGF4 FGF4 + 1
     ]
   ]
 
-  set FGFR (boolFGF4 * tempGATA6)
-  set ERK (tempFGFR)
-  set GATA6 (1 - tempNANOG)
-  set NANOG ((1 - tempERK) * (1 - tempGATA6))
+  ; Boolean function for FGFR
+  ifelse FGFRfunc = "AND" [
+  ; AND
+    set FGFR (boolFGF4 * tempGATA6)
+  ]
+  ; OR
+  [
+    set FGFR ((boolFGF4 + tempGATA6) mod 2) + (boolFGF4 * tempGATA6)
+  ]
+
+  ; Other Boolean functions
+  set ERK tempFGFR
+  set GATA6 (tempNANOG + 1) mod 2
+  set NANOG ((tempERK + 1) mod 2) * ((tempGATA6 + 1) mod 2)
 
   if (tempFGFR = 0) and (FGFR = 1) [
     ask patch-here [ set FGF4 FGF4 - 1 ]
@@ -194,20 +241,90 @@ to FE-pathway
     set diffTrack 0
   ]
 
-  if tempGATA6 != GATA6 [
-    set switch switch + 1
+  ; Added to prevent cells that are not Nanog high & Gata6 low
+  ; from clustering if there was a change
+  if (tempNANOG = 0) or (tempGATA6 = 1) and pluri [
+    set motion true
   ]
+
+  ; Nanog High tracking
+
+  if (NANOG = 1) and (GATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
+    set nhGain nhGain + 1
+  ]
+
+  if (tempNANOG = 1) and (tempGATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
+    set nhLoss nhLoss + 1
+  ]
+
+  ; Gata6 High tracking
+
+  if (NANOG = 0) and (GATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
+    set ghGain ghGain + 1
+  ]
+
+  if (tempNANOG = 0) and (tempGATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
+    set ghLoss ghLoss + 1
+  ]
+
+  ; Both Bigh tracking
+
+  if (NANOG = 1) and (GATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
+  [
+    set bhGain bhGain + 1
+  ]
+
+  if (tempNANOG = 1) and (tempGATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
+  [
+    set bhLoss bhLoss + 1
+  ]
+
+
+  ; Both Low tracking
+
+
+  if (NANOG = 0) and (GATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
+  [
+    set blGain blGain + 1
+  ]
+
+  if (tempNANOG = 0) and (tempGATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
+  [
+    set blLoss blLoss + 1
+  ]
+
 end
 
 to diff-low-surrounded
   if diffLowSurr [
-    if (NANOG = 1) and (GATA6 = 0) and pluri [
+    ;if (NANOG = 1) and (GATA6 = 0) and pluri [
+    if (GATA6 = 0) and pluri [
       let crowd count cells with [ pluri = false ] in-radius interactionDistance
       if crowd > crowdThreshold [
         set diffTrack diffTrack + 1
+
         ;if diffTrack >= diffThresh [ differentiate ]
+
+        ; Spontaneous differentiation
         differentiate
       ]
+    ]
+  ]
+end
+
+to spontaneous-diff
+  if sponDiff != "Off" and pluri [
+    let prob random-float 100
+    if sponDiff = "Gata6 Low + Nanog High" and (NANOG = 1) and (GATA6 = 0) and (prob < sponProb) [
+      differentiate
+    ]
+
+    if sponDiff = "Gata6 Low"  and (GATA6 = 0) and (prob < sponProb) [
+      differentiate
+    ]
+
+    if sponDiff = "All" and (prob < sponProb) [
+      differentiate
     ]
   ]
 end
@@ -237,11 +354,11 @@ end
 
 to color-update
   ifelse not pluri [
-    set color blue
+    set color white
   ]
   [
     if (NANOG = 1) and (GATA6 = 0) [
-      set color green
+      set color lime
     ]
     if (NANOG = 0) and (GATA6 = 1) [
       set color red
@@ -250,7 +367,7 @@ to color-update
       set color yellow
     ]
     if (NANOG = 0) and (GATA6 = 0) [
-      set color yellow
+      set color sky
     ]
   ]
 end
@@ -291,7 +408,7 @@ numGataHigh
 numGataHigh
 0
 1000
-500.0
+100.0
 10
 1
 NIL
@@ -302,11 +419,11 @@ SLIDER
 205
 265
 238
-numGataLow
-numGataLow
+numNanogHigh
+numNanogHigh
 0
 1000
-500.0
+900.0
 10
 1
 NIL
@@ -314,9 +431,9 @@ HORIZONTAL
 
 BUTTON
 900
-495
+680
 973
-528
+713
 Initialize
 setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
@@ -331,9 +448,9 @@ NIL
 
 BUTTON
 1065
-495
+680
 1150
-528
+713
 Run
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
@@ -362,12 +479,12 @@ NIL
 HORIZONTAL
 
 MONITOR
-535
-645
-620
-690
+700
+635
+780
+680
 Differentiated
-count cells with [ color = blue ]
+count cells with [ color = white ]
 17
 1
 11
@@ -403,21 +520,21 @@ NIL
 HORIZONTAL
 
 MONITOR
-315
-645
-400
-690
-Gata6 Low
-count cells with [ color = green ]
+280
+635
+360
+680
+Nanog High
+count cells with [ color = lime ]
 17
 1
 11
 
 BUTTON
 982
-495
+680
 1057
-528
+713
 Step
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
@@ -432,9 +549,9 @@ NIL
 
 BUTTON
 970
-540
+725
 1075
-580
+765
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
@@ -449,9 +566,9 @@ NIL
 
 SLIDER
 5
-505
+510
 265
-538
+543
 crowdThreshold
 crowdThreshold
 5
@@ -464,19 +581,19 @@ HORIZONTAL
 
 CHOOSER
 900
-395
+495
 1150
-440
+540
 record-type
 record-type
 "None" "View" "Interface"
 0
 
 MONITOR
-425
-645
-510
-690
+385
+635
+465
+680
 Gata6 High
 count cells with [ color = red ]
 17
@@ -486,7 +603,7 @@ count cells with [ color = red ]
 TEXTBOX
 75
 10
-255
+180
 40
 Parameters
 20
@@ -511,7 +628,7 @@ HORIZONTAL
 TEXTBOX
 965
 10
-1135
+1080
 40
 Assumptions
 20
@@ -520,20 +637,9 @@ Assumptions
 
 SWITCH
 900
-75
+245
 1150
-108
-synchronization
-synchronization
-1
-1
--1000
-
-SWITCH
-900
-150
-1150
-183
+278
 randomMove
 randomMove
 1
@@ -545,16 +651,16 @@ TEXTBOX
 50
 1150
 68
-Synchronized or individual cell update?
+Stochastic FGFR+ERK and/or FGF4?
 13
 0.0
 1
 
 TEXTBOX
 900
-125
+220
 1150
-143
+238
 Movement: Random or Guye model?
 13
 0.0
@@ -562,9 +668,9 @@ Movement: Random or Guye model?
 
 TEXTBOX
 900
-200
+300
 1150
-231
+331
 Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
 13
 0.0
@@ -572,20 +678,20 @@ Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
 
 SWITCH
 900
-245
+340
 1150
-278
+373
 diffLowSurr
 diffLowSurr
-0
+1
 1
 -1000
 
 TEXTBOX
 900
-290
+385
 1150
-321
+416
 Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
 13
 0.0
@@ -593,9 +699,9 @@ Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
 
 SWITCH
 900
-330
+425
 1150
-363
+458
 diffInteract
 diffInteract
 1
@@ -604,9 +710,9 @@ diffInteract
 
 TEXTBOX
 985
-455
-1145
-475
+640
+1060
+660
 Controls
 20
 0.0
@@ -637,7 +743,7 @@ TEXTBOX
 185
 260
 205
-Number of intiial Gata6 Low Cells
+Number of intiial Nanog High Cells
 13
 0.0
 1
@@ -684,9 +790,9 @@ Crowd threshold when differentiating Gata6 Low cells near differentiated cells
 
 TEXTBOX
 905
-375
+470
 1150
-393
+488
 Video Record Type
 13
 0.0
@@ -694,9 +800,9 @@ Video Record Type
 
 TEXTBOX
 10
-560
+565
 250
-591
+596
 Threshold (in steps) for differentiating cells
 13
 0.0
@@ -704,35 +810,35 @@ Threshold (in steps) for differentiating cells
 
 SLIDER
 5
-580
+585
 265
-613
+618
 diffThresh
 diffThresh
-1
-15
-15.0
-1
+0
+30
+30.0
+3
 1
 NIL
 HORIZONTAL
 
 MONITOR
-645
-645
-730
-690
-Other Cells
+490
+635
+570
+680
+Both High
 count cells with [ color = yellow ]
 17
 1
 11
 
 TEXTBOX
-540
-710
-625
-731
+1270
+10
+1355
+31
 Monitors
 20
 0.0
@@ -740,14 +846,14 @@ Monitors
 
 SLIDER
 5
-655
+660
 265
-688
+693
 maxFGF4
 maxFGF4
 1
 5
-2.0
+5.0
 1
 1
 NIL
@@ -755,24 +861,258 @@ HORIZONTAL
 
 TEXTBOX
 10
-635
+640
 260
-653
+658
 Maximum FGF4 stored on a patch
 13
 0.0
 1
 
 MONITOR
-755
-645
-840
-690
-Switches
-switch
+595
+635
+677
+680
+Both Low
+count cells with [ color = sky ]
 17
 1
 11
+
+CHOOSER
+900
+75
+1145
+120
+stochastic
+stochastic
+"Off" "FGFR+ERK" "FGF4" "All"
+0
+
+CHOOSER
+900
+160
+1145
+205
+sponDiff
+sponDiff
+"Off" "Gata6 Low + Nanog High" "Gata6 Low" "All"
+0
+
+TEXTBOX
+900
+135
+1140
+166
+Spontaneous differentation?
+13
+0.0
+1
+
+TEXTBOX
+285
+685
+355
+721
+Green
+15
+0.0
+1
+
+TEXTBOX
+390
+685
+460
+721
+Red
+15
+0.0
+1
+
+TEXTBOX
+495
+685
+565
+721
+Yellow
+15
+0.0
+1
+
+TEXTBOX
+600
+685
+670
+721
+Blue
+15
+0.0
+1
+
+TEXTBOX
+705
+685
+775
+721
+White
+15
+0.0
+1
+
+MONITOR
+1305
+130
+1395
+175
+Gata6 High Loss
+ghLoss
+17
+1
+11
+
+MONITOR
+1305
+75
+1395
+120
+Nanog High Loss
+nhLoss
+17
+1
+11
+
+MONITOR
+1195
+75
+1285
+120
+Nanog High Gain
+nhGain
+17
+1
+11
+
+MONITOR
+1195
+130
+1285
+175
+Gata6 High Gain
+ghGain
+17
+1
+11
+
+MONITOR
+805
+635
+885
+680
+Alt. Cells
+altcount
+17
+1
+11
+
+TEXTBOX
+810
+685
+880
+721
+Blue + Yellow
+15
+0.0
+1
+
+MONITOR
+1195
+185
+1285
+230
+Both High Gain
+bhGain
+17
+1
+11
+
+MONITOR
+1305
+185
+1395
+230
+Both High Loss
+bhLoss
+17
+1
+11
+
+MONITOR
+1195
+240
+1285
+285
+Both Low Gain
+blGain
+17
+1
+11
+
+MONITOR
+1305
+240
+1395
+285
+Both Low Loss
+blLoss
+17
+1
+11
+
+TEXTBOX
+10
+710
+260
+736
+Probability of spontaneously differentiating
+13
+0.0
+1
+
+SLIDER
+5
+730
+265
+763
+sponProb
+sponProb
+0
+20
+2.5
+.5
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+900
+550
+1145
+568
+FGFR function: 'AND' or 'OR'?
+13
+0.0
+1
+
+CHOOSER
+900
+575
+1150
+620
+FGFRfunc
+FGFRfunc
+"AND" "OR"
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
