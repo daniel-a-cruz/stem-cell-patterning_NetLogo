@@ -68,7 +68,7 @@ to setup
     ; The setup below sets this cell as Gata6 High
     set GATA6 1
     set NANOG 0
-    set color red
+    set color white
   ]
 
   reset-ticks
@@ -84,6 +84,7 @@ to go
   set ghGain 0
   set ghLoss 0
 
+  ; Synchronized updates, currently not in use
   ;ifelse synchronization [
   ;  ask cells [ set divTrack divTrack + 5 ]
   ;  ask cells [ single-cell-move ]
@@ -99,7 +100,7 @@ to go
   ;  ask cells [ cell-division ]
   ;  ask cells [ color-update ]
   ;]
-  ;[
+
   ask cells [
     set divTrack divTrack + 5
     single-cell-move
@@ -110,11 +111,11 @@ to go
       if pluri [ FE-pathway ]
     ]
     diff-low-surrounded
-    spontaneous-diff
+    ;spontaneous-diff
     cell-division
     color-update
+    repel
   ]
-  ;]
 
   ask patches [
     if FGF4 > 0 [
@@ -154,11 +155,7 @@ to single-cell-move
   if motion [
     ;ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
     ifelse (GATA6 = 1) and pluri [
-      ifelse randomMove [
-        rt random-float 360
-        fd cellSpeed
-      ]
-      [
+      ifelse guyeMove [
         let nearestDiff min-one-of cells with [pluri = false ] [ distance myself ]
         ifelse nearestDiff != nobody [
           face nearestDiff
@@ -169,10 +166,27 @@ to single-cell-move
           fd cellSpeed
         ]
       ]
+      [
+        rt random-float 360
+        fd cellSpeed
+      ]
     ]
     [
-      rt random-float 360
-      fd cellSpeed
+      ifelse pluri and nClustering [
+        let nearestLow min-one-of cells with [ NANOG = 0 ] [ distance myself ]
+        ifelse nearestLow != nobody [
+          face nearestLow
+          fd cellSpeed
+        ]
+        [
+          rt random-float 360
+          fd cellSpeed
+        ]
+      ]
+      [
+        rt random-float 360
+        fd cellSpeed
+      ]
     ]
 
     if not pluri [
@@ -192,7 +206,7 @@ end
 to differentiate
   set motion true
   set pluri false
-  set color white
+  set color red
   set GATA6 1
   set NANOG 0
 end
@@ -214,18 +228,35 @@ to FE-pathway
     ]
   ]
 
-  ; Boolean function for FGFR
-  ifelse FGFRfunc = "AND" [
-  ; AND
-    set FGFR (boolFGF4 * tempGATA6)
+  ifelse wDiagram = "FGFR->ERK" [
+    ; Boolean function for ERK depends only on FGFR
+    set ERK tempFGFR
+    ; Boolean function for FGFR based on FGF4 and GATA6
+    ifelse func = "AND" [
+      ; AND
+      set FGFR (boolFGF4 * tempGATA6)
+    ]
+    ; OR
+    [
+      set FGFR ((boolFGF4 + tempGATA6) + (boolFGF4 * tempGATA6)) mod 2
+    ]
   ]
-  ; OR
   [
-    set FGFR ((boolFGF4 + tempGATA6) mod 2) + (boolFGF4 * tempGATA6)
+    ; Boolean function for FGFR depends only on GATA6
+    set FGFR tempGATA6
+    ; Boolean function for ERK based on FGF4 and FGFR
+    ifelse func = "AND" [
+      ; AND
+      set ERK (boolFGF4 * tempFGFR)
+    ]
+    ; OR
+    [
+      set ERK ((boolFGF4 + tempFGFR) + (boolFGF4 * tempFGFR)) mod 2
+    ]
   ]
 
+
   ; Other Boolean functions
-  set ERK tempFGFR
   set GATA6 (tempNANOG + 1) mod 2
   set NANOG ((tempERK + 1) mod 2) * ((tempGATA6 + 1) mod 2)
 
@@ -312,21 +343,22 @@ to diff-low-surrounded
   ]
 end
 
+; Spontaneous differentiation, currently not in use
 to spontaneous-diff
-  if sponDiff != "Off" and pluri [
-    let prob random-float 100
-    if sponDiff = "Gata6 Low + Nanog High" and (NANOG = 1) and (GATA6 = 0) and (prob < sponProb) [
-      differentiate
-    ]
+;  if sponDiff != "Off" and pluri [
+;    let prob random-float 100
+;    if sponDiff = "Gata6 Low + Nanog High" and (NANOG = 1) and (GATA6 = 0) and (prob < sponProb) [
+;      differentiate
+;    ]
 
-    if sponDiff = "Gata6 Low"  and (GATA6 = 0) and (prob < sponProb) [
-      differentiate
-    ]
+;    if sponDiff = "Gata6 Low"  and (GATA6 = 0) and (prob < sponProb) [
+;      differentiate
+;    ]
 
-    if sponDiff = "All" and (prob < sponProb) [
-      differentiate
-    ]
-  ]
+;    if sponDiff = "All" and (prob < sponProb) [
+;      differentiate
+;    ]
+;  ]
 end
 
 to cell-division
@@ -337,6 +369,7 @@ to cell-division
         hatch 1 [
           rt random-float 360
           fd 1
+          repel
         ]
       ]
     ]
@@ -346,6 +379,7 @@ to cell-division
         hatch 1 [
           rt random-float 360
           fd 1
+          repel
         ]
       ]
     ]
@@ -354,14 +388,14 @@ end
 
 to color-update
   ifelse not pluri [
-    set color white
+    set color red
   ]
   [
     if (NANOG = 1) and (GATA6 = 0) [
       set color lime
     ]
     if (NANOG = 0) and (GATA6 = 1) [
-      set color red
+      set color white
     ]
     if (NANOG = 1) and (GATA6 = 1) [
       set color yellow
@@ -369,6 +403,14 @@ to color-update
     if (NANOG = 0) and (GATA6 = 0) [
       set color sky
     ]
+  ]
+end
+
+to repel
+  let too-near one-of other cells in-radius 0.9
+  if too-near != nobody [
+    face too-near
+    fd -1 * (cellSpeed / 5)
   ]
 end
 @#$#@#$#@
@@ -408,7 +450,7 @@ numGataHigh
 numGataHigh
 0
 1000
-100.0
+500.0
 10
 1
 NIL
@@ -423,7 +465,7 @@ numNanogHigh
 numNanogHigh
 0
 1000
-900.0
+500.0
 10
 1
 NIL
@@ -484,7 +526,7 @@ MONITOR
 780
 680
 Differentiated
-count cells with [ color = white ]
+count cells with [ color = red ]
 17
 1
 11
@@ -548,9 +590,9 @@ NIL
 1
 
 BUTTON
-970
+1045
 725
-1075
+1150
 765
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
@@ -581,13 +623,13 @@ HORIZONTAL
 
 CHOOSER
 900
-495
-1150
-540
+725
+1035
+770
 record-type
 record-type
 "None" "View" "Interface"
-0
+1
 
 MONITOR
 385
@@ -595,7 +637,7 @@ MONITOR
 465
 680
 Gata6 High
-count cells with [ color = red ]
+count cells with [ color = white ]
 17
 1
 11
@@ -619,7 +661,7 @@ cellSpeed
 cellSpeed
 0
 5
-3.0
+2.0
 .5
 1
 NIL
@@ -640,8 +682,8 @@ SWITCH
 245
 1150
 278
-randomMove
-randomMove
+guyeMove
+guyeMove
 1
 1
 -1000
@@ -657,7 +699,7 @@ Stochastic FGFR+ERK and/or FGF4?
 1
 
 TEXTBOX
-900
+905
 220
 1150
 238
@@ -667,10 +709,10 @@ Movement: Random or Guye model?
 1
 
 TEXTBOX
-900
-300
+905
+460
 1150
-331
+491
 Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
 13
 0.0
@@ -678,9 +720,9 @@ Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
 
 SWITCH
 900
-340
+500
 1150
-373
+533
 diffLowSurr
 diffLowSurr
 1
@@ -688,10 +730,10 @@ diffLowSurr
 -1000
 
 TEXTBOX
-900
-385
+905
+550
 1150
-416
+581
 Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
 13
 0.0
@@ -699,9 +741,9 @@ Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
 
 SWITCH
 900
-425
+590
 1150
-458
+623
 diffInteract
 diffInteract
 1
@@ -784,16 +826,6 @@ TEXTBOX
 260
 500
 Crowd threshold when differentiating Gata6 Low cells near differentiated cells
-13
-0.0
-1
-
-TEXTBOX
-905
-470
-1150
-488
-Video Record Type
 13
 0.0
 1
@@ -895,16 +927,16 @@ CHOOSER
 160
 1145
 205
-sponDiff
-sponDiff
-"Off" "Gata6 Low + Nanog High" "Gata6 Low" "All"
+wDiagram
+wDiagram
+"FGFR->ERK" "GATA6->FGFR"
 0
 
 TEXTBOX
-900
+905
 135
 1140
-166
+153
 Spontaneous differentation?
 13
 0.0
@@ -914,7 +946,7 @@ TEXTBOX
 285
 685
 355
-721
+705
 Green
 15
 0.0
@@ -924,8 +956,8 @@ TEXTBOX
 390
 685
 460
-721
-Red
+705
+White
 15
 0.0
 1
@@ -934,7 +966,7 @@ TEXTBOX
 495
 685
 565
-721
+705
 Yellow
 15
 0.0
@@ -944,7 +976,7 @@ TEXTBOX
 600
 685
 670
-721
+703
 Blue
 15
 0.0
@@ -954,8 +986,8 @@ TEXTBOX
 705
 685
 775
-721
-White
+703
+Red
 15
 0.0
 1
@@ -1070,49 +1102,45 @@ blLoss
 11
 
 TEXTBOX
-10
-710
-260
-736
-Probability of spontaneously differentiating
-13
-0.0
-1
-
-SLIDER
-5
-730
-265
-763
-sponProb
-sponProb
-0
-20
-2.5
-.5
-1
-NIL
-HORIZONTAL
-
-TEXTBOX
-900
-550
+905
+370
 1145
-568
-FGFR function: 'AND' or 'OR'?
+388
+FGFR/ERK function: 'AND' or 'OR'?
 13
 0.0
 1
 
 CHOOSER
 900
-575
+395
 1150
-620
-FGFRfunc
-FGFRfunc
+440
+func
+func
 "AND" "OR"
 1
+
+TEXTBOX
+905
+295
+1140
+313
+Nanog High clustering?
+13
+0.0
+1
+
+SWITCH
+900
+320
+1150
+353
+nClustering
+nClustering
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1456,7 +1484,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
