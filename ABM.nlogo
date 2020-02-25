@@ -920,7 +920,7 @@ CHOOSER
 stochastic
 stochastic
 "Off" "FGFR+ERK" "FGF4" "All"
-0
+1
 
 CHOOSER
 900
@@ -937,7 +937,7 @@ TEXTBOX
 135
 1140
 153
-Spontaneous differentation?
+Wiring Diagram Modifications
 13
 0.0
 1
