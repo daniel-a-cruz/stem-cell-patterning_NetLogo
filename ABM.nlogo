@@ -1,28 +1,46 @@
 extensions [vid]
 breed [ cells cell ]
 
+; Global counters for gains and loss of cells at specific states over the course of steps (aka ticks)
 globals [ altcount bhGain bhLoss blGain blLoss nhGain nhLoss ghGain ghLoss ]
 
 turtles-own [ motion pluri divTrack diffTrack FGFR ERK GATA6 NANOG ]
 patches-own [ FGF4 ]
 
+; Labeled "Initialize" on interface
 to setup
+
+  ; Resets steps and clears all turtles, patches, plots, etc.
   clear-all
+
+  ; Resets recorder for visualization output
   vid:reset-recorder
 
+  ; Counter which tracks how many cells have equal levels of NANOG and GATA6 (i.e. both high or both low)
   set altcount 0
+  
+  ; Counters which track the gains/losses of cells that have both NANOG and GATA6 set to high (1)
   set bhGain 0
   set bhLoss 0
+  
+  ; Counters which track the gains/losses of cells that have both NANOG and GATA6 set to low (0)
   set blGain 0
   set blLoss 0
+  
+  ; Counters which track the gains/losses of cells that have just NANOG set to high (1)
   set nhGain 0
   set nhLoss 0
+  
+  ; Counters which track the gains/losses of cells that have just GATA6 set to high (1)
   set ghGain 0
   set ghLoss 0
 
+  ; The shape of all cells is circle
   set-default-shape turtles "circle"
 
   ask patches [
+
+    ; Depending on user selection for "stochastic", patches have their initial value of FGF4 set to a random value or zero
     ifelse (stochastic = "FGF4") or (stochastic = "All") [
       set FGF4 random (maxFGF4)
     ]
@@ -31,12 +49,27 @@ to setup
     ]
   ]
 
+  ; Creates desired amount of NANOG High cells from interface
   create-cells (numNanogHigh) [
+
+    ; Each cell is placed at a different spot in the environment
     setxy random-xcor random-ycor
+
+    ; motion is used for conditionals to tell if a cell is able to move
     set motion true
+
+    ; pluri is used for conditionals to tell if a cell is pluripotent
     set pluri true
+
+    ; divTrack is used to determine when a cell divides
+    ; A random value is assigned between 0 and interface threshold
     set divTrack random (pluriMitosisThreshold)
+
+    ; diffTrack is used to determine when a cell differentiates
+    ; A random value is assigned between 0 and interface threshold
     set diffTrack random (diffThresh)
+
+    ; Depending on user selection for "stochastic", cells have their initial values of FGFR and ERK set to a random value or zero
     ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
       set FGFR random 2
       set ERK random 2
@@ -45,18 +78,29 @@ to setup
       set FGFR 0
       set ERK 0
     ]
-    ; The setup below sets this cell as Gata6 Low
+
+    ; The following determines that a cell has a low (0) value of GATA6 and a high (1) value for NANOG
     set GATA6 0
     set NANOG 1
+
+    ; Lime (~green) is used to mark NANOG High pluripotent cells
     set color lime
   ]
 
+  ; Creates desired amount of GATA6 High cells from interface
+  ; Most of the values set below are the same as those set for NANOG High cells
   create-cells (numGataHigh) [
+    
     setxy random-xcor random-ycor
+    
     set motion true
+    
     set pluri true
+    
     set divTrack random (pluriMitosisThreshold)
+    
     set diffTrack random (diffThresh)
+    
     ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
       set FGFR random 2
       set ERK random 2
@@ -65,16 +109,23 @@ to setup
       set FGFR 0
       set ERK 0
     ]
-    ; The setup below sets this cell as Gata6 High
+    
+    ; The following determines that a cell has a high (1) value of GATA6 and a low (0) value for NANOG
     set GATA6 1
     set NANOG 0
+
+    ; White is used to mark GATA6 High pluripotent cells
     set color white
   ]
 
+  ; Resets the number of steps in preparation for the simulation to begin
   reset-ticks
 end
 
+; Labeled "Step" on interface
 to go
+
+  ; Resets all counters below to zero in preparation for recording new changes
   set bhGain 0
   set bhLoss 0
   set blGain 0
@@ -84,39 +135,37 @@ to go
   set ghGain 0
   set ghLoss 0
 
-  ; Synchronized updates, currently not in use
-  ;ifelse synchronization [
-  ;  ask cells [ set divTrack divTrack + 5 ]
-  ;  ask cells [ single-cell-move ]
-  ;  ask cells [
-  ;    ifelse diffInteract [
-  ;      FE-pathway
-  ;    ]
-  ;    [
-  ;      if pluri [ FE-pathway ]
-  ;    ]
-  ;  ]
-  ;  ask cells [ diff-low-surrounded ]
-  ;  ask cells [ cell-division ]
-  ;  ask cells [ color-update ]
-  ;]
-
   ask cells [
+    
+    ; Increases divTrack value by 5 to represent that a cell is closer to division
     set divTrack divTrack + 5
+    
+    ; Calls the single-cell-move function, which controls how cells move around the environment
     single-cell-move
+    
+    ; Depending on "diffInteract", the function FE-pathway will always run or only run if the cell is pluripotent
     ifelse diffInteract [
       FE-pathway
     ]
     [
       if pluri [ FE-pathway ]
     ]
+
+    ; Calls the diff-low-surrounded function
     diff-low-surrounded
-    ;spontaneous-diff
+
+    
+    ; Calls the cell-division function
     cell-division
+
+    ; Calls the color-update function
     color-update
+    
+    ; Calls the repel function
     repel
   ]
 
+  ; Reduces the amount of FGF4 on each patch by 1
   ask patches [
     if FGF4 > 0 [
       set FGF4 FGF4 - 1
@@ -125,8 +174,12 @@ to go
 
   tick
 
+  ; Yellow is used to mark pluripotent cells with both GATA6 and NANOG high
   let ylw count cells with [ color = yellow ]
+  
+  ; Sky (~blue) is used to mark pluripotent cells with both GATA6 and NANOG low
   let blu count cells with [ color = sky ]
+  
   set altcount (ylw + blu)
 end
 
@@ -151,50 +204,68 @@ to move [ dist ]
   ]
 end
 
+; This function controls the movement of an individual cell over the course of one step
 to single-cell-move
   if motion [
+    
     ;ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
+    ; If the cell is GATA6 High and pluripotent
     ifelse (GATA6 = 1) and pluri [
+    
+      ; Guye Model Movement
       ifelse guyeMove [
+
+        ; Pluirpotent GATA6 High cells localize to the nearest differentiated cell if any exist
         let nearestDiff min-one-of cells with [pluri = false ] [ distance myself ]
+
         ifelse nearestDiff != nobody [
           face nearestDiff
           fd cellSpeed
         ]
+        ; Otherwise, they move at random
         [
           rt random-float 360
           fd cellSpeed
         ]
       ]
+      ; If Guye model movement is not active, pluripotent GATA6 High cells will just move at random
       [
         rt random-float 360
         fd cellSpeed
       ]
     ]
     [
+      ; NANOG High (GATA6 Low) Clustering
       ifelse pluri and nClustering [
+
+        ; Pluripotent NANOG High cells localize to each other based on nearest neighbors (if any exist)
         let nearestLow min-one-of cells with [ NANOG = 0 ] [ distance myself ]
         ifelse nearestLow != nobody [
           face nearestLow
           fd cellSpeed
         ]
+        ; Otherwise, they move at random
         [
           rt random-float 360
           fd cellSpeed
         ]
       ]
+      ; If NANOG High clustering is not active, pluripotent NANOG High cells will just move at random
+      ; This case also causes differentiated cells to move at random
       [
         rt random-float 360
         fd cellSpeed
       ]
     ]
 
+    ; If a cell is differentiated and is within a radius of 1 from another differentiated cell, it will stop moving
     if not pluri [
       if any? other cells with [ pluri = false ] in-radius 1.0 [
         set motion false
       ]
     ]
 
+    ; pluripotent NANOG High cells similarly stop moving if they are near other pluripotent NANOG High cells
     if (NANOG = 1) and (GATA6 = 0) and pluri [
       if any? other cells with [ (NANOG = 1) and (GATA6 = 0) and (pluri = true) ] in-radius 1.0 [
         set motion false
@@ -203,35 +274,47 @@ to single-cell-move
   ]
 end
 
+; This function changes a cell's variables to represent that it has differentiated
 to differentiate
+  ; Cells may have stopped moving (i.e clustered) before differentiating, so their motion is reset to true 
   set motion true
+  
   set pluri false
   set color red
   set GATA6 1
   set NANOG 0
 end
 
+
+; This function simulations the FGF/ERK pathway and its effects on the cells within the model.
+; It also updates the global counters (per time step) based on the state changes that each cell undergoes
 to FE-pathway
+
+  ; First, temporary variables are used to store the current values of a cell and the FGF4 value from the patch on which it is located
   let boolFGF4 0
   let tempFGFR FGFR
   let tempERK ERK
   let tempNANOG NANOG
   let tempGATA6 GATA6
 
+  ; This sub-function determines whether the patch on which a cell is located has any FGF4
   ask patch-here [
     if FGF4 > 0 [
+      ; If the patch does, the value of FGF4 will count as "High" or 1
+      ; Otherwise, it is set to "Low" or 0 by default
       set boolFGF4 1
     ]
-    ; Boolean function for FGF4
+    ; Boolean function for FGF4: If a cell is NANOG High (regardless of other values), then it produces FGF4 onto the patch on which it is located
     if (tempNANOG = 1) and (FGF4 < maxFGF4) [
       set FGF4 FGF4 + 1
     ]
   ]
 
+  ; This conditional handles the cases where either FGF4 and GATA6 affect FGFR ("FGFR->ERK") or FGF4 and FGFR affect ERK ("GATA6->FGFR")
   ifelse wDiagram = "FGFR->ERK" [
-    ; Boolean function for ERK depends only on FGFR
-    set ERK tempFGFR
-    ; Boolean function for FGFR based on FGF4 and GATA6
+    ; In this case, the Boolean function for ERK depends only on FGFR
+    set ERK tempFGFR.
+    ; And the Boolean function for FGFR is based on FGF4 and/or GATA6
     ifelse func = "AND" [
       ; AND
       set FGFR (boolFGF4 * tempGATA6)
@@ -242,9 +325,9 @@ to FE-pathway
     ]
   ]
   [
-    ; Boolean function for FGFR depends only on GATA6
+    ; In this case, the Boolean function for FGFR depends only on GATA6
     set FGFR tempGATA6
-    ; Boolean function for ERK based on FGF4 and FGFR
+    ; And the Boolean function for ERK is based on FGF4 and/or FGFR
     ifelse func = "AND" [
       ; AND
       set ERK (boolFGF4 * tempFGFR)
@@ -256,10 +339,11 @@ to FE-pathway
   ]
 
 
-  ; Other Boolean functions
+  ; Next, the remaining Boolean functions are updated based on their current values
   set GATA6 (tempNANOG + 1) mod 2
   set NANOG ((tempERK + 1) mod 2) * ((tempGATA6 + 1) mod 2)
 
+  ; This conditional represents the "expenditure" of FGF4 to when it is received by FGFR
   if (tempFGFR = 0) and (FGFR = 1) [
     ask patch-here [ set FGF4 FGF4 - 1 ]
   ]
@@ -272,13 +356,15 @@ to FE-pathway
     set diffTrack 0
   ]
 
-  ; Added to prevent cells that are not Nanog high & Gata6 low
-  ; from clustering if there was a change
+  ; This conditional was added to prevent cells that are not NANOG High and GATA6 Low from clustering if there was a change in these values
   if (tempNANOG = 0) or (tempGATA6 = 1) and pluri [
     set motion true
   ]
 
-  ; Nanog High tracking
+  ; The conditionals after this point are used to update the global counters which track each kind of cell
+  ; These counters were introduced above 
+
+  ; NANOG High tracking
 
   if (NANOG = 1) and (GATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
     set nhGain nhGain + 1
@@ -288,7 +374,7 @@ to FE-pathway
     set nhLoss nhLoss + 1
   ]
 
-  ; Gata6 High tracking
+  ; GATA6 High tracking
 
   if (NANOG = 0) and (GATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6)) [
     set ghGain ghGain + 1
@@ -298,7 +384,7 @@ to FE-pathway
     set ghLoss ghLoss + 1
   ]
 
-  ; Both Bigh tracking
+  ; Both High tracking
 
   if (NANOG = 1) and (GATA6 = 1) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
   [
@@ -310,9 +396,7 @@ to FE-pathway
     set bhLoss bhLoss + 1
   ]
 
-
   ; Both Low tracking
-
 
   if (NANOG = 0) and (GATA6 = 0) and ((tempNANOG != NANOG) or (tempGATA6 != GATA6))
   [
@@ -326,47 +410,44 @@ to FE-pathway
 
 end
 
+; Function which allows pluripotent GATA6 low cells to differentiate if they are "surrounded" by differentiated cells (and if the diffLowSurr is enabled)
 to diff-low-surrounded
   if diffLowSurr [
     ;if (NANOG = 1) and (GATA6 = 0) and pluri [
     if (GATA6 = 0) and pluri [
+
+      ; The function checks the neighbors within the "interactionDistance" radius to see if there are enough differentiated neighbors near this cell
       let crowd count cells with [ pluri = false ] in-radius interactionDistance
       if crowd > crowdThreshold [
+
+        ; If so, then the differentiation tracker is increased
         set diffTrack diffTrack + 1
 
-        ;if diffTrack >= diffThresh [ differentiate ]
+        ; Then the cell differentiates if it meets or exceeds the differentiation threshold
+        if diffTrack >= diffThresh [ differentiate ]
 
         ; Spontaneous differentiation
-        differentiate
+        ;differentiate
       ]
     ]
   ]
 end
 
-; Spontaneous differentiation, currently not in use
-to spontaneous-diff
-;  if sponDiff != "Off" and pluri [
-;    let prob random-float 100
-;    if sponDiff = "Gata6 Low + Nanog High" and (NANOG = 1) and (GATA6 = 0) and (prob < sponProb) [
-;      differentiate
-;    ]
 
-;    if sponDiff = "Gata6 Low"  and (GATA6 = 0) and (prob < sponProb) [
-;      differentiate
-;    ]
-
-;    if sponDiff = "All" and (prob < sponProb) [
-;      differentiate
-;    ]
-;  ]
-end
-
+; Function for cell division for pluripotent NANOG High and differentiated cells
 to cell-division
+  ; Cells divide if they are clustered (i.e. they have stopped moving)
   if not motion [
     ifelse not pluri [
+
+      ; If a cell is differentiated, the differentiated mitosis threshold is checked against to see if the cell should divide
       if (divTrack > diffMitosisThreshold) [
+        
+        ; In this case, the division tracker variable is reduced by half and the cell is duplicated via "hatch"
         set divTrack (divTrack / 2)
         hatch 1 [
+
+          ; The new cell appears next to the original cell and "repels" if necessary
           rt random-float 360
           fd 1
           repel
@@ -374,6 +455,9 @@ to cell-division
       ]
     ]
     [
+
+      ; If a cell is not differentiated, the pluripotent mitosis threshold is used instead.
+      ; All other aspects are the same as above. 
       if (divTrack > pluriMitosisThreshold) [
         set divTrack (divTrack / 2)
         hatch 1 [
@@ -386,6 +470,7 @@ to cell-division
   ]
 end
 
+; Function to update a cell's color based on its GATA6 and NANOG levels, and whether or not it's differentiated
 to color-update
   ifelse not pluri [
     set color red
@@ -406,9 +491,14 @@ to color-update
   ]
 end
 
+; Function to "bounce back" if a cell is too close to another cells
+; Implementation borrowed from Eunbi Park's model
 to repel
   let too-near one-of other cells in-radius 0.9
+  
+  ; If a cell is within a radius of 0.9 from this cell
   if too-near != nobody [
+    ; Then this cell moves away by a fraction of its cell speed
     face too-near
     fd -1 * (cellSpeed / 5)
   ]
@@ -566,7 +656,7 @@ MONITOR
 635
 360
 680
-Nanog High
+NANOG High
 count cells with [ color = lime ]
 17
 1
@@ -636,7 +726,7 @@ MONITOR
 635
 465
 680
-Gata6 High
+GATA6 High
 count cells with [ color = white ]
 17
 1
@@ -713,7 +803,7 @@ TEXTBOX
 460
 1150
 491
-Pluripotent Gata6 Low cells differentiate within differentiated subpopulation?
+Pluripotent GATA6 Low cells differentiate within differentiated subpopulation?
 13
 0.0
 1
@@ -775,7 +865,7 @@ TEXTBOX
 115
 260
 133
-Number of initial Gata6 High Cells
+Number of initial GATA6 High Cells
 13
 0.0
 1
@@ -785,7 +875,7 @@ TEXTBOX
 185
 260
 205
-Number of intiial Nanog High Cells
+Number of initial NANOG High Cells
 13
 0.0
 1
@@ -825,7 +915,7 @@ TEXTBOX
 470
 260
 500
-Crowd threshold when differentiating Gata6 Low cells near differentiated cells
+Crowd threshold when differentiating GATA6 Low cells near differentiated cells
 13
 0.0
 1
@@ -997,7 +1087,7 @@ MONITOR
 130
 1395
 175
-Gata6 High Loss
+GATA6 High Loss
 ghLoss
 17
 1
@@ -1008,7 +1098,7 @@ MONITOR
 75
 1395
 120
-Nanog High Loss
+NANOG High Loss
 nhLoss
 17
 1
@@ -1019,7 +1109,7 @@ MONITOR
 75
 1285
 120
-Nanog High Gain
+NANOG High Gain
 nhGain
 17
 1
@@ -1030,7 +1120,7 @@ MONITOR
 130
 1285
 175
-Gata6 High Gain
+GATA6 High Gain
 ghGain
 17
 1
@@ -1126,7 +1216,7 @@ TEXTBOX
 295
 1140
 313
-Nanog High clustering?
+NANOG High clustering?
 13
 0.0
 1
