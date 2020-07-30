@@ -1,10 +1,10 @@
-extensions [vid]
+extensions [vid csv]
 breed [ cells cell ]
 
 ; Global counters for gains and loss of cells at specific states over the course of steps (aka ticks)
 globals [ altcount bhGain bhLoss blGain blLoss nhGain nhLoss ghGain ghLoss ]
 
-turtles-own [ motion pluri divTrack diffTrack FGFR ERK GATA6 NANOG ]
+turtles-own [ motion pluri divTrack diffTrack update FGFR ERK GATA6 NANOG ]
 patches-own [ FGF4 ]
 
 ; Labeled "Initialize" on interface
@@ -18,39 +18,35 @@ to setup
 
   ; Counter which tracks how many cells have equal levels of NANOG and GATA6 (i.e. both high or both low)
   set altcount 0
-  
+
   ; Counters which track the gains/losses of cells that have both NANOG and GATA6 set to high (1)
   set bhGain 0
   set bhLoss 0
-  
+
   ; Counters which track the gains/losses of cells that have both NANOG and GATA6 set to low (0)
   set blGain 0
   set blLoss 0
-  
+
   ; Counters which track the gains/losses of cells that have just NANOG set to high (1)
   set nhGain 0
   set nhLoss 0
-  
+
   ; Counters which track the gains/losses of cells that have just GATA6 set to high (1)
   set ghGain 0
   set ghLoss 0
 
-  ; The shape of all cells is circle
+  ; The shape of all cells is a circle
   set-default-shape turtles "circle"
 
-  ask patches [
+  ; Patches have their initial value of FGF4 set to a random value up to the user-defined "maxFGF4"
+  ask patches [ set FGF4 random maxFGF4 ]
 
-    ; Depending on user selection for "stochastic", patches have their initial value of FGF4 set to a random value or zero
-    ifelse (stochastic = "FGF4") or (stochastic = "All") [
-      set FGF4 random (maxFGF4)
-    ]
-    [
-      set FGF4 0
-    ]
-  ]
+  ; Creates desired amount of pluripotent cells
+  ; This is the sum of NANOG High and GATA6 cells, set from the interface
+  create-cells (numNanogHigh + numGataHigh) [
 
-  ; Creates desired amount of NANOG High cells from interface
-  create-cells (numNanogHigh) [
+    ;
+    set update random pathway-update
 
     ; Each cell is placed at a different spot in the environment
     setxy random-xcor random-ycor
@@ -63,21 +59,15 @@ to setup
 
     ; divTrack is used to determine when a cell divides
     ; A random value is assigned between 0 and interface threshold
-    set divTrack random (pluriMitosisThreshold)
+    set divTrack random pluriMitosisThreshold
 
     ; diffTrack is used to determine when a cell differentiates
     ; A random value is assigned between 0 and interface threshold
-    set diffTrack random (diffThresh)
+    set diffTrack random diffThresh
 
-    ; Depending on user selection for "stochastic", cells have their initial values of FGFR and ERK set to a random value or zero
-    ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
-      set FGFR random 2
-      set ERK random 2
-    ]
-    [
-      set FGFR 0
-      set ERK 0
-    ]
+    ; Cells have their initial values of FGFR and ERK set to a random value
+    set FGFR random 2
+    set ERK random 2
 
     ; The following determines that a cell has a low (0) value of GATA6 and a high (1) value for NANOG
     set GATA6 0
@@ -87,29 +77,9 @@ to setup
     set color lime
   ]
 
-  ; Creates desired amount of GATA6 High cells from interface
-  ; Most of the values set below are the same as those set for NANOG High cells
-  create-cells (numGataHigh) [
-    
-    setxy random-xcor random-ycor
-    
-    set motion true
-    
-    set pluri true
-    
-    set divTrack random (pluriMitosisThreshold)
-    
-    set diffTrack random (diffThresh)
-    
-    ifelse (stochastic = "FGFR+ERK") or (stochastic = "All") [
-      set FGFR random 2
-      set ERK random 2
-    ]
-    [
-      set FGFR 0
-      set ERK 0
-    ]
-    
+  ; From the cells created above, a random "numGataHigh" number of them are converted to GATA6 High
+  ask n-of numGataHigh cells [
+
     ; The following determines that a cell has a high (1) value of GATA6 and a low (0) value for NANOG
     set GATA6 1
     set NANOG 0
@@ -136,58 +106,49 @@ to go
   set ghLoss 0
 
   ask cells [
-    
+
+    ;
+    set update (update + 1) mod (pathway-update + 1)
+
     ; Increases divTrack value by 5 to represent that a cell is closer to division
     set divTrack divTrack + 5
-    
+
     ; Calls the single-cell-move function, which controls how cells move around the environment
     single-cell-move
-    
-    ; Depending on "diffInteract", the function FE-pathway will always run or only run if the cell is pluripotent
-    ifelse diffInteract [
-      FE-pathway
-    ]
-    [
-      if pluri [ FE-pathway ]
-    ]
 
-    ; Calls the diff-low-surrounded function
+    ; Calls the function FE-pathway, which simulates the FGF/ERK pathway for a cell
+    if update = pathway-update [ FE-pathway ]
+
+    ; Calls the diff-low-surrounded function, which simulates differentiation caused by being surrounded by differentiated cells
     diff-low-surrounded
 
-    
-    ; Calls the cell-division function
+    ; Calls the cell-division function, which simulates mitosis for pluripotent and differentiated cells
     cell-division
 
-    ; Calls the color-update function
+    ; Calls the color-update function, which updates the color of a cell based on its state
     color-update
-    
-    ; Calls the repel function
-    repel
+
   ]
 
-  ; Reduces the amount of FGF4 on each patch by 1
-  ask patches [
-    if FGF4 > 0 [
-      set FGF4 FGF4 - 1
-    ]
-  ]
+  ; Diffuses 50% of the amount of FGF4 on each patch to its eight neighboring patches
+  diffuse FGF4 0.5
 
   tick
 
   ; Yellow is used to mark pluripotent cells with both GATA6 and NANOG high
   let ylw count cells with [ color = yellow ]
-  
+
   ; Sky (~blue) is used to mark pluripotent cells with both GATA6 and NANOG low
   let blu count cells with [ color = sky ]
-  
+
   set altcount (ylw + blu)
 end
 
 ; Cone movement, currently not in use
-to move [ dist ]
+to cone-move [ dist ]
   if dist >= .25 [
-    let obs count cells in-cone 1 60
-    ifelse obs <= crowdThreshold [
+    let obs count other cells in-cone 1 60
+    ifelse obs < 1 [
       fd dist
     ]
     [
@@ -204,71 +165,100 @@ to move [ dist ]
   ]
 end
 
+;
+to move [ dist ]
+  let iter 10
+
+  while [iter > 0] [
+    fd dist / 10
+    let obs count other cells in-cone 1 60
+    ifelse obs >= 1 [
+      fd -1 * (dist / 10)
+      set iter 0
+    ]
+    [
+    set iter (iter - 1)
+    ]
+  ]
+end
+
 ; This function controls the movement of an individual cell over the course of one step
 to single-cell-move
   if motion [
-    
-    ;ifelse (NANOG = 0) and (GATA6 = 1) and pluri [
-    ; If the cell is GATA6 High and pluripotent
-    ifelse (GATA6 = 1) and pluri [
-    
-      ; Guye Model Movement
-      ifelse guyeMove [
 
-        ; Pluirpotent GATA6 High cells localize to the nearest differentiated cell if any exist
-        let nearestDiff min-one-of cells with [pluri = false ] [ distance myself ]
+    ; Differentiated cells move randomly
+    ifelse not pluri [
+      rt random-float 360
+      move cellSpeed
 
-        ifelse nearestDiff != nobody [
-          face nearestDiff
-          fd cellSpeed
-        ]
-        ; Otherwise, they move at random
-        [
-          rt random-float 360
-          fd cellSpeed
-        ]
-      ]
-      ; If Guye model movement is not active, pluripotent GATA6 High cells will just move at random
-      [
-        rt random-float 360
-        fd cellSpeed
+      ; If a cell is differentiated and is within a radius of 1 from another differentiated cell, it will stop moving
+      if any? other cells with [ pluri = false ] in-radius 1 [
+        set motion false
       ]
     ]
+    ; Below, we handle the cases when a cell is pluripotent
     [
-      ; NANOG High (GATA6 Low) Clustering
-      ifelse pluri and nClustering [
+      ; If the cell is GATA6 High (and NANOG Low)
+      ifelse (GATA6 = 1) and (NANOG = 0) [
 
-        ; Pluripotent NANOG High cells localize to each other based on nearest neighbors (if any exist)
-        let nearestLow min-one-of cells with [ NANOG = 0 ] [ distance myself ]
-        ifelse nearestLow != nobody [
-          face nearestLow
-          fd cellSpeed
+        ; Guye Model Movement
+        ifelse guyeMove [
+
+          ; Pluirpotent GATA6 High cells localize to the nearest differentiated cell if any exist
+          let nearestDiff min-one-of cells in-radius inter-distance with [ pluri = false ] [ distance myself ]
+
+          ifelse nearestDiff != nobody [
+            face nearestDiff
+            move cellSpeed
+          ]
+          ; Otherwise, they move at random
+          [
+            rt random-float 360
+            move cellSpeed
+          ]
         ]
-        ; Otherwise, they move at random
+        ; If Guye model movement is not active, pluripotent GATA6 High cells will just move at random
         [
           rt random-float 360
-          fd cellSpeed
+          move cellSpeed
         ]
       ]
-      ; If NANOG High clustering is not active, pluripotent NANOG High cells will just move at random
-      ; This case also causes differentiated cells to move at random
       [
-        rt random-float 360
-        fd cellSpeed
-      ]
-    ]
+        ; If the cell is NANOG High (and GATA6 Low) and NANOG High cells cluster
+        ifelse (GATA6 = 0) and (NANOG = 1) [
 
-    ; If a cell is differentiated and is within a radius of 1 from another differentiated cell, it will stop moving
-    if not pluri [
-      if any? other cells with [ pluri = false ] in-radius 1.0 [
-        set motion false
-      ]
-    ]
+          ; NANOG High cells cluster
+          ifelse nClustering [
 
-    ; pluripotent NANOG High cells similarly stop moving if they are near other pluripotent NANOG High cells
-    if (NANOG = 1) and (GATA6 = 0) and pluri [
-      if any? other cells with [ (NANOG = 1) and (GATA6 = 0) and (pluri = true) ] in-radius 1.0 [
-        set motion false
+            ; Pluripotent NANOG High cells localize to each other based on nearest neighbors (if any exist)
+            let nearestLow min-one-of cells in-radius inter-distance with [ NANOG = 0 ] [ distance myself ]
+            ifelse nearestLow != nobody [
+              face nearestLow
+              move cellSpeed
+            ]
+            ; Otherwise, they move at random
+            [
+              rt random-float 360
+              move cellSpeed
+            ]
+          ]
+          ; If NANOG High clustering is not active, pluripotent NANOG High cells will just move at random
+          ; This case also causes all other cells to move at random
+          [
+            rt random-float 360
+            move cellSpeed
+          ]
+
+          ; pluripotent NANOG High cells stop moving if they are near other pluripotent NANOG High cells
+          if any? other cells with [ (NANOG = 1) and (GATA6 = 0) and (pluri = true) ] in-radius 1 [
+              set motion false
+          ]
+        ]
+        ; All other cells to move at random
+        [
+          rt random-float 360
+          move cellSpeed
+        ]
       ]
     ]
   ]
@@ -276,9 +266,9 @@ end
 
 ; This function changes a cell's variables to represent that it has differentiated
 to differentiate
-  ; Cells may have stopped moving (i.e clustered) before differentiating, so their motion is reset to true 
+  ; Cells may have stopped moving (i.e clustered) before differentiating, so their motion is reset to true
   set motion true
-  
+
   set pluri false
   set color red
   set GATA6 1
@@ -297,51 +287,24 @@ to FE-pathway
   let tempNANOG NANOG
   let tempGATA6 GATA6
 
-  ; This sub-function determines whether the patch on which a cell is located has any FGF4
+  ; This sub-function determines whether the patch on which a cell is located has at least 1 "unit" of FGF4
   ask patch-here [
-    if FGF4 > 0 [
+    if FGF4 >= 1 [
       ; If the patch does, the value of FGF4 will count as "High" or 1
       ; Otherwise, it is set to "Low" or 0 by default
       set boolFGF4 1
     ]
     ; Boolean function for FGF4: If a cell is NANOG High (regardless of other values), then it produces FGF4 onto the patch on which it is located
-    if (tempNANOG = 1) and (FGF4 < maxFGF4) [
-      set FGF4 FGF4 + 1
+    if tempNANOG = 1 [
+      set FGF4 (FGF4 + 1)
     ]
   ]
-
-  ; This conditional handles the cases where either FGF4 and GATA6 affect FGFR ("FGFR->ERK") or FGF4 and FGFR affect ERK ("GATA6->FGFR")
-  ifelse wDiagram = "FGFR->ERK" [
-    ; In this case, the Boolean function for ERK depends only on FGFR
-    set ERK tempFGFR.
-    ; And the Boolean function for FGFR is based on FGF4 and/or GATA6
-    ifelse func = "AND" [
-      ; AND
-      set FGFR (boolFGF4 * tempGATA6)
-    ]
-    ; OR
-    [
-      set FGFR ((boolFGF4 + tempGATA6) + (boolFGF4 * tempGATA6)) mod 2
-    ]
-  ]
-  [
-    ; In this case, the Boolean function for FGFR depends only on GATA6
-    set FGFR tempGATA6
-    ; And the Boolean function for ERK is based on FGF4 and/or FGFR
-    ifelse func = "AND" [
-      ; AND
-      set ERK (boolFGF4 * tempFGFR)
-    ]
-    ; OR
-    [
-      set ERK ((boolFGF4 + tempFGFR) + (boolFGF4 * tempFGFR)) mod 2
-    ]
-  ]
-
 
   ; Next, the remaining Boolean functions are updated based on their current values
-  set GATA6 (tempNANOG + 1) mod 2
-  set NANOG ((tempERK + 1) mod 2) * ((tempGATA6 + 1) mod 2)
+  set FGFR (boolFGF4 * tempGATA6)
+  set ERK tempFGFR
+  set GATA6 (1 + tempNANOG + tempNANOG * tempGATA6) mod 2
+  set NANOG (1 + tempERK + tempGATA6 + tempERK * tempGATA6) mod 2
 
   ; This conditional represents the "expenditure" of FGF4 to when it is received by FGFR
   if (tempFGFR = 0) and (FGFR = 1) [
@@ -349,20 +312,35 @@ to FE-pathway
   ]
 
   ifelse (GATA6 = 1) and pluri [
-    set diffTrack diffTrack + 1
-    if diffTrack >= diffThresh [ differentiate ]
+
+    ifelse tempGATA6 = 1 [
+
+      set diffTrack diffTrack + 1
+      if diffTrack >= diffThresh [ differentiate ]
+    ]
+    [
+      set diffTrack random diffThresh
+    ]
   ]
   [
     set diffTrack 0
   ]
 
   ; This conditional was added to prevent cells that are not NANOG High and GATA6 Low from clustering if there was a change in these values
-  if (tempNANOG = 0) or (tempGATA6 = 1) and pluri [
+  if tempNANOG != NANOG and pluri [
     set motion true
   ]
 
-  ; The conditionals after this point are used to update the global counters which track each kind of cell
-  ; These counters were introduced above 
+  if stocNANOG [
+
+    let stoch random 2
+
+    if (GATA6 = 0) and pluri and (stoch = 1) [
+      set NANOG (NANOG + 1) mod 2
+    ]
+  ]
+
+  ; The conditionals after this point are used to update the global counters which track each kind of cell. These counters were introduced above
 
   ; NANOG High tracking
 
@@ -411,60 +389,70 @@ to FE-pathway
 end
 
 ; Function which allows pluripotent GATA6 low cells to differentiate if they are "surrounded" by differentiated cells (and if the diffLowSurr is enabled)
+; Differentiation will be implemented by converting a cell into being GATA6 High
 to diff-low-surrounded
   if diffLowSurr [
-    ;if (NANOG = 1) and (GATA6 = 0) and pluri [
+
     if (GATA6 = 0) and pluri [
 
-      ; The function checks the neighbors within the "interactionDistance" radius to see if there are enough differentiated neighbors near this cell
-      let crowd count cells with [ pluri = false ] in-radius interactionDistance
-      if crowd > crowdThreshold [
+      ; The function checks the neighbors within a radius of 1 to see if there are enough differentiated neighbors near this cell
+      let crowd count other cells with [ pluri = false ] in-radius 1
 
-        ; If so, then the differentiation tracker is increased
-        set diffTrack diffTrack + 1
+      ; Maximum number of cells at a distance of 1 "unit" is 6 (without overlap)
+      if crowd >= 4 [
 
-        ; Then the cell differentiates if it meets or exceeds the differentiation threshold
-        if diffTrack >= diffThresh [ differentiate ]
+        ; If so, then the cell becomes GATA6 High
+        set NANOG 0
+        set GATA6 1
+        set diffTrack random diffThresh
+        set motion true
 
-        ; Spontaneous differentiation
-        ;differentiate
+        ifelse NANOG = 0 [ set blLoss blLoss + 1 ] [ set nhLoss nhLoss + 1 ]
+
+        set ghGain ghGain + 1
       ]
     ]
   ]
 end
 
-
 ; Function for cell division for pluripotent NANOG High and differentiated cells
 to cell-division
-  ; Cells divide if they are clustered (i.e. they have stopped moving)
-  if not motion [
-    ifelse not pluri [
 
-      ; If a cell is differentiated, the differentiated mitosis threshold is checked against to see if the cell should divide
-      if (divTrack > diffMitosisThreshold) [
-        
-        ; In this case, the division tracker variable is reduced by half and the cell is duplicated via "hatch"
-        set divTrack (divTrack / 2)
-        hatch 1 [
+  let crowd count other cells in-radius 1
 
-          ; The new cell appears next to the original cell and "repels" if necessary
-          rt random-float 360
-          fd 1
-          repel
+  ; Pluripotent NANOG High cells and differentiated cells can divide if they are clustered with similar cells (and thus have stopped moving).
+  ; However, if a cell is completely surrounded, then it cannot divide. The maximum number of cells directly next to a cell is 6 (without overlap).
+  if (crowd < 6) and (not motion) [
+
+    ; If a cell is differentiated, the differentiated mitosis threshold is checked against to see if the cell should divide
+    ; Otherwise, the pluripotent mitosis threshold is used instead.
+    if (not pluri and (divTrack > diffMitosisThreshold)) or (pluri and (divTrack > pluriMitosisThreshold)) [
+      set divTrack (divTrack / 2)
+
+      ; The new cell appears on top of the original cell
+      hatch 1 [
+
+        set diffTrack random diffThresh
+        let divLoop 12
+        let preXcor xcor
+        let preYcor ycor
+        rt random-float 360
+
+       while [ divLoop > 0 ] [
+
+          let obs count other cells in-cone 1 60
+
+          ifelse (obs <= 1) [
+            move cellSpeed
+            set divLoop 0
+          ]
+          [
+            rt 30
+            set divLoop (divLoop - 1)
+          ]
         ]
-      ]
-    ]
-    [
 
-      ; If a cell is not differentiated, the pluripotent mitosis threshold is used instead.
-      ; All other aspects are the same as above. 
-      if (divTrack > pluriMitosisThreshold) [
-        set divTrack (divTrack / 2)
-        hatch 1 [
-          rt random-float 360
-          fd 1
-          repel
-        ]
+        if (preXcor = xcor) and (preYcor = ycor) [ die ]
       ]
     ]
   ]
@@ -473,34 +461,27 @@ end
 ; Function to update a cell's color based on its GATA6 and NANOG levels, and whether or not it's differentiated
 to color-update
   ifelse not pluri [
+    ; Differentiated cells are red
     set color red
   ]
+  ; The following are all colors for pluripotent cells
   [
+    ; NANOG High is lime (~green)
     if (NANOG = 1) and (GATA6 = 0) [
       set color lime
     ]
+    ; GATA6 High is white
     if (NANOG = 0) and (GATA6 = 1) [
       set color white
     ]
+    ; Both High is yellow
     if (NANOG = 1) and (GATA6 = 1) [
       set color yellow
     ]
+    ; Both low is sky (~blue)
     if (NANOG = 0) and (GATA6 = 0) [
       set color sky
     ]
-  ]
-end
-
-; Function to "bounce back" if a cell is too close to another cells
-; Implementation borrowed from Eunbi Park's model
-to repel
-  let too-near one-of other cells in-radius 0.9
-  
-  ; If a cell is within a radius of 0.9 from this cell
-  if too-near != nobody [
-    ; Then this cell moves away by a fraction of its cell speed
-    face too-near
-    fd -1 * (cellSpeed / 5)
   ]
 end
 @#$#@#$#@
@@ -533,14 +514,14 @@ steps
 
 SLIDER
 5
-135
+130
 265
-168
+163
 numGataHigh
 numGataHigh
 0
 1000
-500.0
+0.0
 10
 1
 NIL
@@ -548,14 +529,14 @@ HORIZONTAL
 
 SLIDER
 5
-205
+200
 265
-238
+233
 numNanogHigh
 numNanogHigh
 0
 1000
-500.0
+1000.0
 10
 1
 NIL
@@ -563,9 +544,9 @@ HORIZONTAL
 
 BUTTON
 900
-680
+430
 973
-713
+463
 Initialize
 setup\n\nif record-type = \"View\" [\nvid:start-recorder\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:start-recorder\nvid:record-interface\n]    
 NIL
@@ -579,10 +560,10 @@ NIL
 1
 
 BUTTON
-1065
-680
-1150
-713
+1070
+430
+1155
+463
 Run
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 T
@@ -594,21 +575,6 @@ NIL
 NIL
 NIL
 0
-
-SLIDER
-5
-420
-265
-453
-interactionDistance
-interactionDistance
-1
-5
-2.0
-1
-1
-NIL
-HORIZONTAL
 
 MONITOR
 700
@@ -623,9 +589,9 @@ count cells with [ color = red ]
 
 SLIDER
 5
-275
+270
 265
-308
+303
 pluriMitosisThreshold
 pluriMitosisThreshold
 0
@@ -638,9 +604,9 @@ HORIZONTAL
 
 SLIDER
 5
-345
+340
 265
-378
+373
 diffMitosisThreshold
 diffMitosisThreshold
 0
@@ -664,9 +630,9 @@ count cells with [ color = lime ]
 
 BUTTON
 982
-680
-1057
-713
+430
+1062
+463
 Step
 go\n\nif record-type = \"View\" [\nvid:record-view\n]\n\nif record-type = \"Interface\" [\nvid:record-interface\n] 
 NIL
@@ -681,9 +647,9 @@ NIL
 
 BUTTON
 1045
-725
-1150
-765
+475
+1155
+515
 Save Video
 if record-type = \"View\" or record-type = \"Interface\" [\nvid:save-recording user-new-file\n]
 NIL
@@ -696,30 +662,15 @@ NIL
 NIL
 1
 
-SLIDER
-5
-510
-265
-543
-crowdThreshold
-crowdThreshold
-5
-30
-15.0
-5
-1
-NIL
-HORIZONTAL
-
 CHOOSER
 900
-725
+475
 1035
-770
+520
 record-type
 record-type
 "None" "View" "Interface"
-1
+2
 
 MONITOR
 385
@@ -751,7 +702,7 @@ cellSpeed
 cellSpeed
 0
 5
-2.0
+1.0
 .5
 1
 NIL
@@ -769,40 +720,30 @@ Assumptions
 
 SWITCH
 900
-245
-1150
-278
+70
+1155
+103
 guyeMove
 guyeMove
-1
+0
 1
 -1000
 
 TEXTBOX
 905
-50
+45
 1150
-68
-Stochastic FGFR+ERK and/or FGF4?
+63
+GATA6 Movement: Random or Guye?
 13
 0.0
 1
 
 TEXTBOX
 905
-220
+200
 1150
-238
-Movement: Random or Guye model?
-13
-0.0
-1
-
-TEXTBOX
-905
-460
-1150
-491
+231
 Pluripotent GATA6 Low cells differentiate within differentiated subpopulation?
 13
 0.0
@@ -810,41 +751,20 @@ Pluripotent GATA6 Low cells differentiate within differentiated subpopulation?
 
 SWITCH
 900
-500
-1150
-533
+240
+1155
+273
 diffLowSurr
 diffLowSurr
-1
-1
--1000
-
-TEXTBOX
-905
-550
-1150
-581
-Do differentiated cells interact with the FGF/ERK pathway (via FGF4)?
-13
-0.0
-1
-
-SWITCH
-900
-590
-1150
-623
-diffInteract
-diffInteract
-1
+0
 1
 -1000
 
 TEXTBOX
 985
-640
+390
 1060
-660
+410
 Controls
 20
 0.0
@@ -862,9 +782,9 @@ Cell speed
 
 TEXTBOX
 10
-115
+110
 260
-133
+128
 Number of initial GATA6 High Cells
 13
 0.0
@@ -872,9 +792,9 @@ Number of initial GATA6 High Cells
 
 TEXTBOX
 10
-185
+180
 260
-205
+200
 Number of initial NANOG High Cells
 13
 0.0
@@ -882,9 +802,9 @@ Number of initial NANOG High Cells
 
 TEXTBOX
 10
-325
+320
 260
-343
+338
 Mitosis threshold for pluripotent cells
 13
 0.0
@@ -892,9 +812,9 @@ Mitosis threshold for pluripotent cells
 
 TEXTBOX
 10
-255
+250
 260
-273
+268
 Mitosis threshold for differentiated cells\t
 13
 0.0
@@ -902,29 +822,9 @@ Mitosis threshold for differentiated cells\t
 
 TEXTBOX
 10
-400
-265
-418
-Interaction distance for determining a crowd
-13
-0.0
-1
-
-TEXTBOX
-10
-470
-260
-500
-Crowd threshold when differentiating GATA6 Low cells near differentiated cells
-13
-0.0
-1
-
-TEXTBOX
-10
-565
+390
 250
-596
+421
 Threshold (in steps) for differentiating cells
 13
 0.0
@@ -932,14 +832,14 @@ Threshold (in steps) for differentiating cells
 
 SLIDER
 5
-585
+410
 265
-618
+443
 diffThresh
 diffThresh
 0
-30
-30.0
+45
+36.0
 3
 1
 NIL
@@ -957,37 +857,12 @@ count cells with [ color = yellow ]
 11
 
 TEXTBOX
-1270
+1265
 10
-1355
+1345
 31
 Monitors
 20
-0.0
-1
-
-SLIDER
-5
-660
-265
-693
-maxFGF4
-maxFGF4
-1
-5
-5.0
-1
-1
-NIL
-HORIZONTAL
-
-TEXTBOX
-10
-640
-260
-658
-Maximum FGF4 stored on a patch
-13
 0.0
 1
 
@@ -1001,36 +876,6 @@ count cells with [ color = sky ]
 17
 1
 11
-
-CHOOSER
-900
-75
-1145
-120
-stochastic
-stochastic
-"Off" "FGFR+ERK" "FGF4" "All"
-1
-
-CHOOSER
-900
-160
-1145
-205
-wDiagram
-wDiagram
-"FGFR->ERK" "GATA6->FGFR"
-0
-
-TEXTBOX
-905
-135
-1140
-153
-Wiring Diagram Modifications
-13
-0.0
-1
 
 TEXTBOX
 285
@@ -1083,10 +928,10 @@ Red
 1
 
 MONITOR
-1305
-130
-1395
-175
+1315
+115
+1430
+160
 GATA6 High Loss
 ghLoss
 17
@@ -1094,10 +939,10 @@ ghLoss
 11
 
 MONITOR
-1305
-75
-1395
-120
+1315
+60
+1430
+105
 NANOG High Loss
 nhLoss
 17
@@ -1105,10 +950,10 @@ nhLoss
 11
 
 MONITOR
-1195
-75
-1285
-120
+1175
+60
+1295
+105
 NANOG High Gain
 nhGain
 17
@@ -1116,10 +961,10 @@ nhGain
 11
 
 MONITOR
-1195
-130
-1285
-175
+1175
+115
+1295
+160
 GATA6 High Gain
 ghGain
 17
@@ -1148,10 +993,10 @@ Blue + Yellow
 1
 
 MONITOR
-1195
-185
-1285
-230
+1175
+170
+1295
+215
 Both High Gain
 bhGain
 17
@@ -1159,10 +1004,10 @@ bhGain
 11
 
 MONITOR
-1305
-185
-1395
-230
+1315
+170
+1430
+215
 Both High Loss
 bhLoss
 17
@@ -1170,10 +1015,10 @@ bhLoss
 11
 
 MONITOR
-1195
-240
-1285
-285
+1175
+225
+1295
+270
 Both Low Gain
 blGain
 17
@@ -1181,10 +1026,10 @@ blGain
 11
 
 MONITOR
-1305
-240
-1395
-285
+1315
+225
+1430
+270
 Both Low Loss
 blLoss
 17
@@ -1193,29 +1038,9 @@ blLoss
 
 TEXTBOX
 905
-370
-1145
-388
-FGFR/ERK function: 'AND' or 'OR'?
-13
-0.0
-1
-
-CHOOSER
-900
-395
-1150
-440
-func
-func
-"AND" "OR"
-1
-
-TEXTBOX
-905
-295
+120
 1140
-313
+138
 NANOG High clustering?
 13
 0.0
@@ -1223,14 +1048,137 @@ NANOG High clustering?
 
 SWITCH
 900
-320
-1150
-353
+145
+1155
+178
 nClustering
 nClustering
+0
+1
+-1000
+
+SLIDER
+5
+485
+265
+518
+maxFGF4
+maxFGF4
+1
+5
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+10
+465
+260
+483
+Maximum initial FGF4 amount on a patch
+13
+0.0
+1
+
+SLIDER
+5
+555
+265
+588
+pathway-update
+pathway-update
+0
+5
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+10
+535
+255
+553
+Number of steps for pathway update
+13
+0.0
+1
+
+SLIDER
+5
+630
+265
+663
+inter-distance
+inter-distance
+0
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+15
+605
+260
+623
+Interaction distance for movement
+13
+0.0
+1
+
+SWITCH
+900
+325
+1155
+358
+stocNANOG
+stocNANOG
 1
 1
 -1000
+
+TEXTBOX
+905
+300
+1150
+318
+Is NANOG stochastic?
+13
+0.0
+1
+
+CHOOSER
+900
+535
+1035
+580
+export-cells
+export-cells
+"GATA6 High" "NANOG High" "Other" "All"
+3
+
+BUTTON
+1045
+535
+1155
+575
+Save CSV
+if export-cells = \"GATA6 High\" [\n  csv:to-file user-new-file [ (list xcor ycor) ] of cells with [ color = white or color = red ]\n]\n\nif export-cells = \"NANOG High\" [\n  csv:to-file user-new-file [ (list xcor ycor) ] of cells with [ color = lime ]\n]\n\nif export-cells = \"Other\" [\n  csv:to-file user-new-file [ (list xcor ycor) ] of cells with [ color = sky or color = yellow ]\n]\n\nif export-cells = \"All\" [\n  csv:to-file user-new-file [ (list xcor ycor) ] of cells\n]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
